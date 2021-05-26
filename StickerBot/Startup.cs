@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using System;
+using System.Text.Json;
 using Telegram.Bot;
 
 namespace StickerBot
@@ -33,11 +34,18 @@ namespace StickerBot
                 .AddSingleton<ITelegramBotClient>(s =>
                 {
                     string token = Environment.GetEnvironmentVariable("BotToken");
+                    string webhook = Environment.GetEnvironmentVariable("WebhookUrl");
                     TelegramBotClient client = new(token);
-                    client.SetWebhookAsync("https://tkspiqg-bot.herokuapp.com/");
+                    client.SetWebhookAsync(webhook);
                     return client;
                 })
-                .AddControllers();
+                .AddControllers()
+                .AddNewtonsoftJson()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+                });
         }
 
         public void Configure(IApplicationBuilder builder)
@@ -53,11 +61,7 @@ namespace StickerBot
             builder
                 .UseHttpsRedirection()
                 .UseRouting()
-                .UseAuthorization()
-                .UseEndpoints(endpoints =>
-                {
-                    endpoints.MapControllers();
-                });
+                .UseEndpoints(endpoints => endpoints.MapControllers());
         }
     }
 }
