@@ -1,4 +1,4 @@
-﻿using JournalApiClient.Services;
+﻿using JournalApiClient.Data;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -9,22 +9,15 @@ namespace JournalApiClient.Handlers
 {
     public class ClientHttpMessageHandler : DelegatingHandler
     {
-        private IJournalApiClient _journalApiClient;
-        private string _jwt; // TODO: Get JWT somewhere else.
+        private Jwt _jwt;
 
-        //public ClientHttpMessageHandler(IJournalApiClient journalApiClient)
-        //{
-        //    _journalApiClient = journalApiClient;
-        //}
+        public ClientHttpMessageHandler(Jwt jwt) => _jwt = jwt;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            //if (_jwt is null)
-            //    _jwt = await _journalApiClient.GetJwtAsync(GetEV("BotLogin"), GetEV("BotPassword"), ct);
-            
             request.Version = HttpVersion.Version20;
-            //request.Headers.Authorization = new("Bearer", _jwt);
-            //string result = await request.Content.ReadAsStringAsync();
+            //request.Headers.Authorization = new("Bearer", _jwt.Token);
+            string result = await request.Content.ReadAsStringAsync();
             HttpResponseMessage response = await base.SendAsync(request, ct).ConfigureAwait(true);
             //string result2 = await response.Content.ReadAsStringAsync();
 
@@ -33,7 +26,5 @@ namespace JournalApiClient.Handlers
 
             return response;
         }
-
-        private static string GetEV(string key) => Environment.GetEnvironmentVariable(key);
     }
 }

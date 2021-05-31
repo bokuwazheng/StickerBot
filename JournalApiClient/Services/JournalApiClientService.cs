@@ -1,9 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.IO;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Mime;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 using GraphQL;
 using GraphQL.Client.Abstractions;
 using JournalApiClient.Data;
@@ -11,12 +18,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace JournalApiClient.Services
 {
-    public class JournalApiClient : IJournalApiClient
+    public class JournalApiClientService : IJournalApiClient
     {
-        public JournalApiClient(IServiceProvider provider)
+        public JournalApiClientService(IServiceProvider provider)
         {
             HttpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
-            HttpClient = HttpClientFactory.CreateClient(nameof(JournalApiClient));
+            HttpClient = HttpClientFactory.CreateClient(nameof(JournalApiClientService));
             GraphQLClient = provider.GetRequiredService<IGraphQLClient>();
         }
 
@@ -66,10 +73,45 @@ namespace JournalApiClient.Services
             return result.Data.Suggestion;
         }
 
-        public async Task<string> GetJwtAsync(string login, string password, CancellationToken ct)
+        private static HttpRequestMessage CreateHttpRequestMessage(HttpMethod httpMethod, string apiMethod, List<KeyValuePair<string, string>> queryParams = null, HttpContent content = null)
         {
-            Jwt jwt = await HttpClient.GetFromJsonAsync<Jwt>("/login", ct);
-            return jwt?.Token ?? throw new Exception("Failed to authorize");
+            Uri uri;
+            if (queryParams?.Count > 0)
+            {
+                NameValueCollection query = HttpUtility.ParseQueryString(string.Empty);
+                queryParams.ForEach(pair =>
+                {
+                    if (pair.Value is not null)
+                        query.Add(pair.Key, pair.Value);
+                });
+                uri = new Uri($"{apiMethod}?{query}", UriKind.Relative);
+            }
+            else
+                uri = new(apiMethod, UriKind.Relative);
+            return new(httpMethod, uri)
+            {
+                Content = content,
+            };
+        }
+
+        public async Task<Jwt> GetJwtAsync(string login, string password, CancellationToken ct)
+        {
+            object credentials = new { login, password };
+            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(credentials);
+
+            ByteArrayContent content = new(bytes);
+            content.Headers.ContentType = new(MediaTypeNames.Application.Json);
+
+            Jwt jwt = null;
+            Uri uri = new("/login", UriKind.Relative);
+            using HttpRequestMessage request = new(HttpMethod.Get, uri) { Content = content };
+            using HttpResponseMessage response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+
+            Stream responseStream = await response.Content.ReadAsStreamAsync(ct);
+            await using (responseStream) 
+                jwt = await JsonSerializer.DeserializeAsync<Jwt>(responseStream);
+
+            return jwt;
         }
 
         public async Task<List<Sender>> GetSendersAsync(CancellationToken ct)

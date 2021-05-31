@@ -1,6 +1,7 @@
 using GraphQL.Client.Abstractions;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
+using JournalApiClient.Data;
 using JournalApiClient.Handlers;
 using JournalApiClient.Services;
 using Microsoft.AspNetCore.Builder;
@@ -47,7 +48,7 @@ namespace StickerBot
                 });
 
             services
-                .AddHttpClient<JournalApiClient.Services.JournalApiClient>((s, h) =>
+                .AddHttpClient<JournalApiClientService>((s, h) =>
                 {
                     h.DefaultRequestVersion = HttpVersion.Version20;
                     h.BaseAddress = baseAddress;
@@ -60,21 +61,15 @@ namespace StickerBot
                 .AddTransient<IGraphQLClient, GraphQLHttpClient>(s =>
                 {
                     IHttpClientFactory factory = s.GetRequiredService<IHttpClientFactory>();
-                    HttpClient httpClient = factory.CreateClient(nameof(JournalApiClient.Services.JournalApiClient));
+                    HttpClient httpClient = factory.CreateClient(nameof(JournalApiClientService));
 
-                    GraphQLHttpClientOptions options = new()
-                    {
-                        EndPoint = baseAddress,
-                        //HttpMessageHandler = s.GetRequiredService<ClientHttpMessageHandler>()
-                    };
-
-                    DefaultContractResolver contractResolver = new DefaultContractResolver
-                    {
-                        NamingStrategy = new SnakeCaseNamingStrategy()
-                    };
+                    GraphQLHttpClientOptions options = new() { EndPoint = baseAddress };
 
                     NewtonsoftJsonSerializer serializer = new();
-                    serializer.JsonSerializerSettings.ContractResolver = contractResolver;
+                    serializer.JsonSerializerSettings.ContractResolver = new DefaultContractResolver() 
+                    { 
+                        NamingStrategy = new SnakeCaseNamingStrategy() 
+                    };
                     serializer.JsonSerializerSettings.Formatting = Formatting.Indented;
 
                     return new(options, serializer, httpClient);
@@ -85,7 +80,8 @@ namespace StickerBot
                     client.SetWebhookAsync(webhook);
                     return client;
                 })
-                .AddTransient<IJournalApiClient, JournalApiClient.Services.JournalApiClient>()
+                .AddTransient<IJournalApiClient, JournalApiClientService>()
+                .AddSingleton<Jwt>()
                 .AddControllers()
                 .AddNewtonsoftJson()
                 .AddJsonOptions(options =>

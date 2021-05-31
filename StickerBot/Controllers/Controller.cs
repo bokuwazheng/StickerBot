@@ -19,11 +19,13 @@ namespace StickerBot.Controllers
         private readonly ITelegramBotClient _client;
         private readonly IJournalApiClient _journal;
 
-        public Controller(ILogger<Controller> logger, ITelegramBotClient client, IJournalApiClient journal)
+        public Controller(ILogger<Controller> logger, ITelegramBotClient client, IJournalApiClient journal, Jwt jwt)
         {
             _logger = logger;
             _client = client;
             _journal = journal;
+
+            //jwt = _journal.GetJwtAsync("123", "123").Result;
         }
 
         [HttpGet]
@@ -87,14 +89,14 @@ namespace StickerBot.Controllers
             try
             {
                 _logger.LogInformation("Echo2");
-
+                var jwt = await _journal.GetJwtAsync("123", "123");
                 string response = "";
                 ChatId token = new(Environment.GetEnvironmentVariable("ChatId"));
 
                 string ext = Path.GetExtension("fsadfsdsfda.jpg").ToLower();
                 if (ext is ".jpg" or ".png")
                 {
-                    string fileId = "sdfgsdfg22322sss3ss37sssssss292";
+                    string fileId = "sdfgsdfg22322sss3ss371sssssss292";
                     int userId = 7777777;
                     Suggestion ss = await _journal.CreateEntryAsync(userId, fileId);
                     //Suggestion ss = await _journal.GetSuggestionAsync(fileId);
