@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.31025.194
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StickerBot", "StickerBot\StickerBot.csproj", "{A1D7C3A0-72FB-4EA3-851C-D8706B68E48D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StickerBot", "StickerBot\StickerBot.csproj", "{A1D7C3A0-72FB-4EA3-851C-D8706B68E48D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JournalApiClient", "JournalApiClient\JournalApiClient.csproj", "{64A68BBF-34A8-45DF-A372-D7EAD897A703}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{A1D7C3A0-72FB-4EA3-851C-D8706B68E48D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1D7C3A0-72FB-4EA3-851C-D8706B68E48D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1D7C3A0-72FB-4EA3-851C-D8706B68E48D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{64A68BBF-34A8-45DF-A372-D7EAD897A703}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{64A68BBF-34A8-45DF-A372-D7EAD897A703}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{64A68BBF-34A8-45DF-A372-D7EAD897A703}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{64A68BBF-34A8-45DF-A372-D7EAD897A703}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
