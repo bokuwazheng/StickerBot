@@ -6,8 +6,9 @@ namespace JournalApiClient.Services
 {
     public interface IJournalApiClient
     {
-        Task<string> GetStatusAsync(int userId, string fileId, CancellationToken ct = default);
-        Task<Suggestion> CreateEntryAsync(int userId, string fileId, CancellationToken ct = default);
+        Task<string> GetStatusAsync(string fileId, CancellationToken ct = default);
+        Task SubscribeAsync(CancellationToken ct = default);
+        Task<Suggestion> CreateEntryAsync(Sender sender, string fileId, CancellationToken ct = default);
         Task<Suggestion> GetSuggestionAsync(string fileId, CancellationToken ct = default);
     }
 }

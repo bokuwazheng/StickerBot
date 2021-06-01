@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -24,8 +25,6 @@ namespace StickerBot.Controllers
             _logger = logger;
             _client = client;
             _journal = journal;
-
-            //jwt = _journal.GetJwtAsync("123", "123").Result;
         }
 
         [HttpGet]
@@ -38,48 +37,95 @@ namespace StickerBot.Controllers
         }
 
         [HttpPost]
-        public async Task EchoAsync([FromBody] Update update)
+        public async Task HanleAsync([FromBody] Update update)
         {
             try
             {
-                _logger.LogInformation("Echo");
+                if (update is null)
+                    return;
+
+                _logger.LogInformation($"Received a message of type { update.Type } from { update.Message?.From?.Username }");
 
                 Message message = update.Message;
-                string response = "";
-                if (message.Type is MessageType.Text && message.Text is not null)
+
+                Task task = message.Type switch
                 {
-                    if (message.Text.Contains("/status"))
-                    {
-                        string fileId = message.Text.Split(' ')[1];
-                        string status = await _journal.GetStatusAsync(message.From.Id, fileId);
-                        response = $"{ fileId } : { status }";
-                    }
-                    else
-                    {
-                        response = "Use a command or send an image";
-                    }
-                }
-                else if (message.Type is MessageType.Document)
-                {
-                    string ext = Path.GetExtension(message.Document.FileName).ToLower();
-                    if (ext is ".jpg" or ".png")
-                    {
-                        string fileId = message.Document.FileId;
-                        int userId = message.From.Id;
-                        await _journal.CreateEntryAsync(userId, fileId);
-                        string token = Environment.GetEnvironmentVariable("ChatId");
-                        await _client.SendPhotoAsync(token, new(fileId));
-                    }
-                    else
-                        response = "Please send a .JPG or .PNG file.";
-                }
-                
-                await _client.SendTextMessageAsync(message.Chat.Id, response);
+                    MessageType.Document => HandleDocumentMessageAsync(message, CancellationToken.None),
+                    MessageType.Text => HandleTextMessageAsync(message, CancellationToken.None),
+                    _ => null
+                };
+
+                if (task is not null)
+                    await task;
+                else
+                    await _client.SendTextMessageAsync(message.Chat.Id, "Please send an image or enter a command.");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
             }
+        }
+
+        private async Task HandleDocumentMessageAsync(Message message, CancellationToken ct)
+        {
+            string ext = Path.GetExtension(message.Document.FileName).ToLower();
+            if (ext is ".jpg" or ".png")
+            {
+                User user = message.From;
+                Sender sender = new()
+                {
+                    UserId = user.Id,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Username = user.Username
+                };
+
+                string fileId = message.Document.FileId;
+
+                await _journal.CreateEntryAsync(sender, fileId);
+                await _client.SendTextMessageAsync(message.Chat.Id, "Thank you! To get notified when your submission status changes type '/subscribe'. You can also check the status manually using '/status id' command.");
+
+                string token = Environment.GetEnvironmentVariable("ChatId");
+                await _client.SendPhotoAsync(token, new(fileId));
+            }
+        }
+
+        private async Task HandleTextMessageAsync(Message message, CancellationToken ct)
+        {
+            string command = null;
+            string argument = null;
+
+            if (message.Text.StartsWith('/'))
+            {
+                string[] msg = message.Text.Split(' ');
+                command = msg[0];
+                argument = msg[1];
+            }
+
+            Task<string> task = command switch
+            {
+                "/status" => HandleStatusCommandAsync(argument),
+                "/subscribe" => HandleSubscribeCommandAsync(),
+                _ => null
+            };
+
+            if (task is not null)
+            {
+                string response = await task.ConfigureAwait(false);
+                await _client.SendTextMessageAsync(message.Chat.Id, response).ConfigureAwait(false);
+            }
+        }
+
+        private async Task<string> HandleStatusCommandAsync(string fileId)
+        {
+            string status = await _journal.GetStatusAsync(fileId).ConfigureAwait(false);
+            return $"{ fileId } : { status }";
+        }
+
+        private async Task<string> HandleSubscribeCommandAsync()
+        {
+            await _journal.SubscribeAsync().ConfigureAwait(false);
+            return "You will receive a notification once your submission status is changed.";
         }
 
         [Route("/test")]
@@ -89,24 +135,8 @@ namespace StickerBot.Controllers
             try
             {
                 _logger.LogInformation("Echo2");
-                //var jwt = await _journal.GetJwtAsync("123", "123");
-                string response = "";
-                ChatId token = new(Environment.GetEnvironmentVariable("ChatId"));
 
-                string ext = Path.GetExtension("fsadfsdsfda.jpg").ToLower();
-                if (ext is ".jpg" or ".png")
-                {
-                    string fileId = "sdfgsdfg22322sss3ss371sssssss292";
-                    int userId = 7777777;
-                    Suggestion ss = await _journal.CreateEntryAsync(userId, fileId);
-                    //Suggestion ss = await _journal.GetSuggestionAsync(fileId);
-
-                    //await _client.SendPhotoAsync(token, new(fileId));
-                }
-                else
-                    response = "Please send a .JPG or .PNG file.";
-
-                //await _client.SendTextMessageAsync(token, response);
+                var status = await HandleStatusCommandAsync("123").ConfigureAwait(false);
             }
             catch (Exception ex)
             {

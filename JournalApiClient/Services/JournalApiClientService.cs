@@ -1,16 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.IO;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Net.Mime;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 using GraphQL;
 using GraphQL.Client.Abstractions;
 using JournalApiClient.Data;
@@ -31,20 +23,20 @@ namespace JournalApiClient.Services
         protected HttpClient HttpClient { get; }
         protected IGraphQLClient GraphQLClient { get; }
 
-        public async Task<Suggestion> CreateEntryAsync(int userId, string fileId, CancellationToken ct = default)
+        public async Task<Suggestion> CreateEntryAsync(Sender sender, string fileId, CancellationToken ct = default)
         {
             GraphQLRequest request = new()
             {
                 Query = @"
-                    mutation addSuggestion($file_id: String, $user_id: ID) {
-                      addSuggestion(file_id: $file_id, user_id: $user_id) {
+                    mutation addSuggestion($file_id: String, $sender: SenderInput) {
+                      addSuggestion(file_id: $file_id, sender: $sender) {
                         file_id
                         made_at
                         user_id
                       }
                     }",
 
-                Variables = new { file_id = fileId, user_id = userId.ToString() },
+                Variables = new { file_id = fileId, sender = sender },
                 OperationName = "addSuggestion"
             };
 
@@ -62,6 +54,8 @@ namespace JournalApiClient.Services
                         file_id
                         made_at
                         user_id
+                        status
+                        comment
                       }
                     }",
 
@@ -85,7 +79,13 @@ namespace JournalApiClient.Services
             return result.Data;
         }
 
-        public Task<string> GetStatusAsync(int userId, string fileId, CancellationToken ct)
+        public async Task<string> GetStatusAsync(string fileId, CancellationToken ct = default)
+        {
+            Suggestion suggestion = await GetSuggestionAsync(fileId, ct).ConfigureAwait(false);
+            return $"({ suggestion.Status }) { suggestion.Comment }";
+        }
+
+        public Task SubscribeAsync(CancellationToken ct = default)
         {
             throw new NotImplementedException();
         }
