@@ -19,7 +19,7 @@ namespace StickerBot.Controllers
         private readonly ITelegramBotClient _client;
         private readonly IJournalApiClient _journal;
 
-        public Controller(ILogger<Controller> logger, ITelegramBotClient client, IJournalApiClient journal, Jwt jwt)
+        public Controller(ILogger<Controller> logger, ITelegramBotClient client, IJournalApiClient journal)
         {
             _logger = logger;
             _client = client;
@@ -89,7 +89,7 @@ namespace StickerBot.Controllers
             try
             {
                 _logger.LogInformation("Echo2");
-                var jwt = await _journal.GetJwtAsync("123", "123");
+                //var jwt = await _journal.GetJwtAsync("123", "123");
                 string response = "";
                 ChatId token = new(Environment.GetEnvironmentVariable("ChatId"));
 

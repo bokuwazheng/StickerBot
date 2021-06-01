@@ -81,7 +81,6 @@ namespace StickerBot
                     return client;
                 })
                 .AddTransient<IJournalApiClient, JournalApiClientService>()
-                .AddSingleton<Jwt>()
                 .AddControllers()
                 .AddNewtonsoftJson()
                 .AddJsonOptions(options =>
@@ -90,7 +89,7 @@ namespace StickerBot
                     options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
                 });
         }
-
+        
         public void Configure(IApplicationBuilder builder)
         {
             if (_env.IsDevelopment())
