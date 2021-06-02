@@ -7,4 +7,13 @@
         New,
         UnderConsideration,
     }
+
+    public enum Review
+    {
+        Initialized,
+        Status,
+        Comment,
+        Notify,
+        Finished
+    }
 }

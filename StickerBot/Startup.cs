@@ -1,6 +1,7 @@
 using GraphQL.Client.Abstractions;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
+using JournalApiClient.Data;
 using JournalApiClient.Handlers;
 using JournalApiClient.Services;
 using Microsoft.AspNetCore.Builder;
@@ -73,6 +74,7 @@ namespace StickerBot
 
                     return new(options, serializer, httpClient);
                 })
+                .AddSingleton<IReviewStateService, ReviewStateService>()
                 .AddTransient<ITelegramBotClient>(s =>
                 {
                     TelegramBotClient client = new(token);
