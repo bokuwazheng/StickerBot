@@ -10,5 +10,6 @@ namespace JournalApiClient.Services
         Task SubscribeAsync(CancellationToken ct = default);
         Task<Suggestion> CreateEntryAsync(Sender sender, string fileId, CancellationToken ct = default);
         Task<Suggestion> GetSuggestionAsync(string fileId, CancellationToken ct = default);
+        Task<Suggestion> GetNewSuggestionAsync(CancellationToken ct = default);
     }
 }

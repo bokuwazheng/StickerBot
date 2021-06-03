@@ -5,7 +5,7 @@ namespace JournalApiClient.Data
     public interface IReviewStateService
     {
         string FileId { get; }
-        Review State { get; set; }
+        Stage Stage { get; set; }
         int UserId { get; }
 
         void Initialize(int userId, string fileId);
@@ -18,12 +18,11 @@ namespace JournalApiClient.Data
         public void Initialize(int userId, string fileId)
         {
             _current = new(userId, fileId);
-            State = Review.Initialized;
         }
 
         public int UserId => _current.UserId;
         public string FileId => _current.FileId;
-        public Review State { get => _current.State; set => _current.State = value; }
+        public Stage Stage { get => _current.Stage; set => _current.Stage = value; }
     }
 
     public class ReviewState
@@ -34,8 +33,18 @@ namespace JournalApiClient.Data
             FileId = fileId;
         }
 
+        public Review Review { get; set; }
         public int UserId { get; }
         public string FileId { get; }
-        public Review State { get; set; }
+        public Stage Stage { get; set; }
+    }
+
+    public class Review
+    {
+        public int UserId { get; set; }
+        public string FileId { get; set; }
+        public Status? Status { get; set; }
+        public string Comment { get; set; }
+        public bool Notify { get; set; }
     }
 }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using GraphQL;
 using GraphQL.Client.Abstractions;
 using JournalApiClient.Data;
+using JournalApiClient.Data.Enums;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace JournalApiClient.Services
@@ -60,6 +61,28 @@ namespace JournalApiClient.Services
                     }",
 
                 Variables = new { file_id = fileId },
+                OperationName = "suggestion"
+            };
+
+            var result = await GraphQLClient.SendQueryAsync<ResponseSuggestionType>(request, ct);
+            return result.Data.Suggestion;
+        }
+
+        public async Task<Suggestion> GetNewSuggestionAsync(CancellationToken ct = default)
+        {
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    query suggestion() {
+                      suggestion() {
+                        file_id
+                        made_at
+                        user_id
+                        status
+                        comment
+                      }
+                    }",
+
                 OperationName = "suggestion"
             };
 
