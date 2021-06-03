@@ -47,4 +47,11 @@ namespace JournalApiClient.Data
         public string Comment { get; set; }
         public bool Notify { get; set; }
     }
+
+    public class ReviewLite
+    {
+        public string id { get; set; }
+        public Status? st { get; set; }
+        public string cm { get; set; }
+    }
 }

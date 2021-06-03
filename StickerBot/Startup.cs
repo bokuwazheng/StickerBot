@@ -78,7 +78,7 @@ namespace StickerBot
                 .AddTransient<ITelegramBotClient>(s =>
                 {
                     TelegramBotClient client = new(token);
-                    client.SetWebhookAsync(webhook);
+                    //client.SetWebhookAsync(webhook); // TODO: Uncomment after tests.
                     return client;
                 })
                 .AddTransient<IJournalApiClient, JournalApiClientService>()

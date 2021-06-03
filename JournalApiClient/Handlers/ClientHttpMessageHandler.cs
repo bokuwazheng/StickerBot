@@ -41,8 +41,15 @@ namespace JournalApiClient.Handlers
             request.Headers.Authorization = new("Bearer", _jwt?.Token);
             HttpResponseMessage response = await base.SendAsync(request, ct).ConfigureAwait(true);
 
+            string r = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
             if (!response.IsSuccessStatusCode)
                 throw new Exception($"{ response.StatusCode } { response.ReasonPhrase }");
+            else // TODO: Must be a 400-500 code.
+            {
+                if (r.Contains("error"))
+                    throw new Exception(r);
+            }
 
             return response;
         }

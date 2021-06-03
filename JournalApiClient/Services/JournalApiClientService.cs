@@ -34,10 +34,12 @@ namespace JournalApiClient.Services
                         file_id
                         made_at
                         user_id
+                        status
+                        comment
                       }
                     }",
 
-                Variables = new { file_id = fileId, sender = sender },
+                Variables = new { FileId = fileId, Sender = sender },
                 OperationName = "addSuggestion"
             };
 
@@ -60,12 +62,36 @@ namespace JournalApiClient.Services
                       }
                     }",
 
-                Variables = new { file_id = fileId },
+                Variables = new { FileId = fileId },
                 OperationName = "suggestion"
             };
 
             var result = await GraphQLClient.SendQueryAsync<ResponseSuggestionType>(request, ct);
             return result.Data.Suggestion;
+        }
+
+        public async Task<Sender> GetSenderAsync(int userId, CancellationToken ct = default)
+        {
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    query sender($user_id: ID) {
+                      sender(user_id: $user_id) {
+                        user_id
+                        first_name
+                        last_name
+                        username
+                        is_banned
+                        notify
+                      }
+                    }",
+
+                Variables = new { user_id = userId },
+                OperationName = "sender"
+            };
+
+            var result = await GraphQLClient.SendQueryAsync<ResponseSenderType>(request, ct);
+            return result.Data.Sender;
         }
 
         public async Task<Suggestion> GetNewSuggestionAsync(CancellationToken ct = default)
@@ -111,6 +137,23 @@ namespace JournalApiClient.Services
         public Task SubscribeAsync(CancellationToken ct = default)
         {
             throw new NotImplementedException();
+        }
+
+        public async Task BanAsync(int userId, CancellationToken ct = default)
+        {
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    mutation banSender($user_id: ID) {
+                      banSender(user_id: $user_id) {
+                      }
+                    }",
+
+                Variables = new { user_id = userId },
+                OperationName = "banSender"
+            };
+
+            await GraphQLClient.SendMutationAsync<ResponseSenderType>(request, ct);
         }
     }
 }

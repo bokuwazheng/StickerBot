@@ -7,6 +7,7 @@ namespace JournalApiClient.Data
     {
         [JsonProperty(NamingStrategyType = typeof(DefaultNamingStrategy))]
         public Suggestion AddSuggestion { get; set; }
+
         public Suggestion Suggestion { get; set; }
     }
 }

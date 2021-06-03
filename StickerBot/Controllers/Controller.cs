@@ -1,6 +1,8 @@
 ﻿using JournalApiClient.Data;
+using JournalApiClient.Data.Constants;
 using JournalApiClient.Data.Enums;
 using JournalApiClient.Services;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -54,14 +56,14 @@ namespace StickerBot.Controllers
                 Task task = update.Type switch
                 {
                     UpdateType.Message => HandleMessageAsync(update.Message, CancellationToken.None),
-                    UpdateType.InlineQuery => HandleCallbackQuery(update.CallbackQuery, CancellationToken.None),
+                    UpdateType.CallbackQuery => HandleCallbackQuery(update.CallbackQuery, CancellationToken.None),
                     _ => null
                 };
 
                 if (task is not null)
                     await task;
                 else
-                    await _bot.SendTextMessageAsync(update.Message.Chat.Id, "Please send an image or enter a command.");
+                    await _bot.SendTextMessageAsync(update.Message.Chat.Id, Reply.WrongUpdateType);
             }
             catch (Exception ex)
             {
@@ -84,7 +86,7 @@ namespace StickerBot.Controllers
         private async Task HandleDocumentMessageAsync(Message message, CancellationToken ct)
         {
             string ext = Path.GetExtension(message.Document.FileName).ToLower();
-            if (ext is ".jpg" or ".png")
+            if (ext is not ".jpg" or ".png")
                 return;
 
             User user = message.From;
@@ -93,20 +95,35 @@ namespace StickerBot.Controllers
                 UserId = user.Id,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
-                Username = user.Username
+                Username = user.Username,
+                ChatId = message.Chat.Id
             };
 
             string fileId = message.Document.FileId;
 
-            Suggestion suggestion = await _repo.CreateEntryAsync(sender, fileId);
-            await _bot.SendTextMessageAsync(message.Chat.Id, "Thank you! To get notified when your submission status changes type '/subscribe'. You can also check the status manually using '/status id' command.");
+            await _repo.CreateEntryAsync(sender, fileId);
+            await _bot.SendTextMessageAsync(message.Chat.Id, $"Id { fileId }");
+            await _bot.SendTextMessageAsync(message.Chat.Id, Reply.ThankYou);
 
-            string token = Environment.GetEnvironmentVariable("ChatId");
+            await SendForReviewAsync(user, fileId, ct).ConfigureAwait(false);
+        }
+
+        private async Task SendForReviewAsync(User user, string fileId, CancellationToken ct)
+        {
+            ChatId chat = new(Environment.GetEnvironmentVariable("ChatId"));
             Review review = new() { UserId = user.Id };
-            string approved = JsonConvert.SerializeObject(review.Status = Status.Approved);
-            string declined = JsonConvert.SerializeObject(review.Status = Status.Declined);
-            string considered = JsonConvert.SerializeObject(review.Status = Status.Review);
-            string banned = JsonConvert.SerializeObject(review.Status = Status.Banned);
+
+            review.Status = Status.Approved;
+            string approved = JsonConvert.SerializeObject(review);
+
+            review.Status = Status.Declined;
+            string declined = JsonConvert.SerializeObject(review);
+
+            review.Status = Status.Review;
+            string considered = JsonConvert.SerializeObject(review);
+
+            review.Status = Status.Banned;
+            string banned = JsonConvert.SerializeObject(review);
 
             InlineKeyboardMarkup markup = new(new[]
             {
@@ -122,7 +139,10 @@ namespace StickerBot.Controllers
                 }
             });
 
-            await _bot.SendPhotoAsync(token, new(fileId), "Choose", replyMarkup: markup);
+            Message messge = await _bot.SendDocumentAsync(chat, new(fileId), $"From { user.Username }", replyMarkup: markup, cancellationToken: ct);
+
+            if (messge.Type is MessageType.Unknown)
+                _logger.LogInformation("GBPLF)");
         }
 
         private async Task HandleTextMessageAsync(Message message, CancellationToken ct)
@@ -135,6 +155,18 @@ namespace StickerBot.Controllers
                 string[] msg = message.Text.Split(' ');
                 command = msg[0];
                 argument = msg[1];
+            }
+
+            async Task<string> HandleStatusCommandAsync(string fileId, CancellationToken ct)
+            {
+                string status = await _repo.GetStatusAsync(fileId, ct).ConfigureAwait(false);
+                return $"{ fileId } : { status }";
+            }
+
+            async Task<string> HandleSubscribeCommandAsync(CancellationToken ct)
+            {
+                await _repo.SubscribeAsync(ct).ConfigureAwait(false);
+                return Reply.Subscribed;
             }
 
             Task<string> task = command switch
@@ -151,18 +183,6 @@ namespace StickerBot.Controllers
             }
         }
 
-        private async Task<string> HandleStatusCommandAsync(string fileId, CancellationToken ct)
-        {
-            string status = await _repo.GetStatusAsync(fileId).ConfigureAwait(false);
-            return $"{ fileId } : { status }";
-        }
-
-        private async Task<string> HandleSubscribeCommandAsync(CancellationToken ct)
-        {
-            await _repo.SubscribeAsync(ct).ConfigureAwait(false);
-            return "You will receive a notification once your submission status is changed.";
-        }
-
         private async Task HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken ct)
         {
             Review review = JsonConvert.DeserializeObject<Review>(callbackQuery.Data);
@@ -170,34 +190,72 @@ namespace StickerBot.Controllers
             Task task = review.Status switch
             {
                 Status.Review => GetNextAsync(ct),
-                Status.Banned => BanAsync(review.UserId, ct),
-                Status.Approved or Status.Declined when review.Comment is not null => NotifyAsync(review.FileId, ct),
-                Status.Approved or Status.Declined => SendCommentKeyboardAsync(review, ct),
+                Status.Banned => BanAsync(callbackQuery.Id, review.UserId, ct),
+                Status.Approved => NotifyAsync(review, ct),
+                Status.Declined when review.Comment is not null => NotifyAsync(review, ct),
+                Status.Declined => SendCommentKeyboardAsync(callbackQuery, review, ct),
                 _ => null
             };
 
-            await _bot.AnswerCallbackQueryAsync(callbackQuery.Id, "").ConfigureAwait(false);
+            await task;
         }
 
         private async Task GetNextAsync(CancellationToken ct)
         {
             Suggestion suggestion = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
-            
+            //await SendForReviewAsync(user, fileId, ct).ConfigureAwait(false);
         }
 
-        private async Task BanAsync(int userId, CancellationToken ct)
+        private async Task BanAsync(string callbackQueryId, int userId, CancellationToken ct)
         {
-
+            await _repo.BanAsync(userId, ct).ConfigureAwait(false);
+            await _bot.AnswerCallbackQueryAsync(callbackQueryId, $"User { userId } got banned.", cancellationToken: ct).ConfigureAwait(false);
         }
 
-        private async Task NotifyAsync(string fileId, CancellationToken ct)
+        private async Task NotifyAsync(Review review, CancellationToken ct)
         {
+            Sender sender = await _repo.GetSenderAsync(review.UserId, ct).ConfigureAwait(false);
 
+            string message = review.Status switch
+            {
+                Status.Approved => Reply.Approved,
+                Status.Declined => $"{ Reply.Declined } Reason: { review.Comment }",
+                _ => throw new($"Incorrect status: { review.Status }. Can't notify user about unreviewed suggestion.")
+            };
+
+            if (sender.Notify)
+                await _bot.SendPhotoAsync(sender.ChatId, new(review.FileId), message, cancellationToken: ct).ConfigureAwait(false);
         }
 
-        private async Task SendCommentKeyboardAsync(Review review, CancellationToken ct)
+        private async Task SendCommentKeyboardAsync(CallbackQuery callbackQuery, Review review, CancellationToken ct)
         {
-            string comment = Comment.DoesNotFit;
+            review.Comment = Comment.LowQuality;
+            string comment1 = JsonConvert.SerializeObject(review);
+
+            review.Comment = Comment.DoesNotFit;
+            string comment2 = JsonConvert.SerializeObject(review);
+
+            review.Comment = Comment.TooSimilar;
+            string comment3 = JsonConvert.SerializeObject(review);
+
+            review.Comment = Comment.Other;
+            string comment4 = JsonConvert.SerializeObject(review);
+
+            InlineKeyboardMarkup markup = new(new[]
+{
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("Low quality", comment1),
+                    InlineKeyboardButton.WithCallbackData("Does not fit", comment2),
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("Too similar", comment3),
+                    InlineKeyboardButton.WithCallbackData("Other", comment4),
+                }
+            });
+
+            await _bot.EditMessageReplyMarkupAsync(callbackQuery.InlineMessageId, markup, ct).ConfigureAwait(false);
         }
 
         [Route("/test")]
@@ -210,21 +268,18 @@ namespace StickerBot.Controllers
 
                 string token = Environment.GetEnvironmentVariable("ChatId");
 
-                InlineKeyboardMarkup markup = new(new[]
-{
-                    new[]
-                    {
-                        InlineKeyboardButton.WithCallbackData("Approve", Status.Approved.ToString()),
-                        InlineKeyboardButton.WithCallbackData("Decline", Status.Declined.ToString()),
-                    },
-                    new[]
-                    {
-                        InlineKeyboardButton.WithCallbackData("Ask later", Status.Review.ToString()),
-                        InlineKeyboardButton.WithCallbackData("Ban", "Ban"),
-                    }
-                });
+                Sender sender = new()
+                {
+                    UserId = 123123,
+                    FirstName = "Zheng",
+                    LastName = null,
+                    Username = "bokuwazheng",
+                    ChatId = 123123
+                };
 
-                await _bot.SendTextMessageAsync(token, "Choose", replyMarkup: markup);
+                string fileId = "FILEIDIDIDD";
+
+                Suggestion suggestion = await _repo.CreateEntryAsync(sender, fileId);
             }
             catch (Exception ex)
             {

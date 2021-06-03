@@ -5,6 +5,7 @@ namespace JournalApiClient.Data
 {
     public class Suggestion // TODO: Make non-nullabe.
     {
+        public int? Id { get; set; }
         public string FileId { get; set; }
         public DateTime? MadeAt { get; set; }
         public int? UserId { get; set; }
