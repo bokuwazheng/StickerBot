@@ -1,4 +1,7 @@
-﻿namespace JournalApiClient.Data.Constants
+﻿using System.Collections.Generic;
+using System.Linq;
+
+namespace JournalApiClient.Data.Constants
 {
     public class Comment
     {
@@ -6,6 +9,8 @@
         public const string DoesNotFit = "Does not fit.";
         public const string TooSimilar = "Too similar to an existing sticker.";
         public const string Other = "Personal preferences or other reasons.";
+
+        public static List<string> ToList() => typeof(Comment).GetFields().Select(x => (string)x.GetValue(null)).ToList();
     }
 
     public class Reply

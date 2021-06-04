@@ -50,8 +50,8 @@ namespace JournalApiClient.Data
 
     public class ReviewLite
     {
-        public string id { get; set; }
+        public int? id { get; set; }
         public Status? st { get; set; }
-        public string cm { get; set; }
+        public int? cm { get; set; }
     }
 }

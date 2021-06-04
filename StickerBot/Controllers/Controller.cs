@@ -7,7 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -101,28 +103,28 @@ namespace StickerBot.Controllers
 
             string fileId = message.Document.FileId;
 
-            await _repo.CreateEntryAsync(sender, fileId);
-            await _bot.SendTextMessageAsync(message.Chat.Id, $"Id { fileId }");
+            Suggestion suggestion = await _repo.CreateEntryAsync(sender, fileId);
+            await _bot.SendTextMessageAsync(message.Chat.Id, $"Id { suggestion.Id }");
             await _bot.SendTextMessageAsync(message.Chat.Id, Reply.ThankYou);
 
-            await SendForReviewAsync(user, fileId, ct).ConfigureAwait(false);
+            await SendForReviewAsync(user, suggestion.Id.Value, fileId, ct).ConfigureAwait(false);
         }
 
-        private async Task SendForReviewAsync(User user, string fileId, CancellationToken ct)
+        private async Task SendForReviewAsync(User user, int id, string fileId, CancellationToken ct)
         {
             ChatId chat = new(Environment.GetEnvironmentVariable("ChatId"));
-            Review review = new() { UserId = user.Id };
+            ReviewLite review = new() { id = id };
 
-            review.Status = Status.Approved;
+            review.st = Status.Approved;
             string approved = JsonConvert.SerializeObject(review);
 
-            review.Status = Status.Declined;
+            review.st = Status.Declined;
             string declined = JsonConvert.SerializeObject(review);
 
-            review.Status = Status.Review;
+            review.st = Status.Review;
             string considered = JsonConvert.SerializeObject(review);
 
-            review.Status = Status.Banned;
+            review.st = Status.Banned;
             string banned = JsonConvert.SerializeObject(review);
 
             InlineKeyboardMarkup markup = new(new[]
@@ -139,10 +141,7 @@ namespace StickerBot.Controllers
                 }
             });
 
-            Message messge = await _bot.SendDocumentAsync(chat, new(fileId), $"From { user.Username }", replyMarkup: markup, cancellationToken: ct);
-
-            if (messge.Type is MessageType.Unknown)
-                _logger.LogInformation("GBPLF)");
+            await _bot.SendDocumentAsync(chat, new(fileId), $"From { user.Username }", replyMarkup: markup, cancellationToken: ct);
         }
 
         private async Task HandleTextMessageAsync(Message message, CancellationToken ct)
@@ -157,10 +156,16 @@ namespace StickerBot.Controllers
                 argument = msg[1];
             }
 
-            async Task<string> HandleStatusCommandAsync(string fileId, CancellationToken ct)
+            async Task<string> HandleStatusCommandAsync(string id, CancellationToken ct)
             {
-                string status = await _repo.GetStatusAsync(fileId, ct).ConfigureAwait(false);
-                return $"{ fileId } : { status }";
+                var parsed = int.TryParse(id, out int sug);
+                if (parsed)
+                {
+                    string status = await _repo.GetStatusAsync(sug, ct).ConfigureAwait(false);
+                    return $"{ id } : { status }";
+                }
+                else
+                    return "";
             }
 
             async Task<string> HandleSubscribeCommandAsync(CancellationToken ct)
@@ -185,14 +190,14 @@ namespace StickerBot.Controllers
 
         private async Task HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken ct)
         {
-            Review review = JsonConvert.DeserializeObject<Review>(callbackQuery.Data);
+            ReviewLite review = JsonConvert.DeserializeObject<ReviewLite>(callbackQuery.Data);
 
-            Task task = review.Status switch
+            Task task = review.st switch
             {
                 Status.Review => GetNextAsync(ct),
-                Status.Banned => BanAsync(callbackQuery.Id, review.UserId, ct),
+                Status.Banned => BanAsync(callbackQuery.Id, review.id.Value, ct),
                 Status.Approved => NotifyAsync(review, ct),
-                Status.Declined when review.Comment is not null => NotifyAsync(review, ct),
+                Status.Declined when review.cm is not null => NotifyAsync(review, ct),
                 Status.Declined => SendCommentKeyboardAsync(callbackQuery, review, ct),
                 _ => null
             };
@@ -206,56 +211,52 @@ namespace StickerBot.Controllers
             //await SendForReviewAsync(user, fileId, ct).ConfigureAwait(false);
         }
 
-        private async Task BanAsync(string callbackQueryId, int userId, CancellationToken ct)
+        private async Task BanAsync(string callbackQueryId, int suggestionId, CancellationToken ct)
         {
-            await _repo.BanAsync(userId, ct).ConfigureAwait(false);
-            await _bot.AnswerCallbackQueryAsync(callbackQueryId, $"User { userId } got banned.", cancellationToken: ct).ConfigureAwait(false);
+            Sender sender = await _repo.BanAsync(suggestionId, ct).ConfigureAwait(false);
+            await _bot.AnswerCallbackQueryAsync(callbackQueryId, $"User { sender.Username } got banned.", cancellationToken: ct).ConfigureAwait(false);
         }
 
-        private async Task NotifyAsync(Review review, CancellationToken ct)
+        private async Task NotifyAsync(ReviewLite review, CancellationToken ct)
         {
-            Sender sender = await _repo.GetSenderAsync(review.UserId, ct).ConfigureAwait(false);
+            Sender sender = await _repo.GetSuggesterAsync(review.id.Value, ct).ConfigureAwait(false);
 
-            string message = review.Status switch
+            string message = review.st switch
             {
                 Status.Approved => Reply.Approved,
-                Status.Declined => $"{ Reply.Declined } Reason: { review.Comment }",
-                _ => throw new($"Incorrect status: { review.Status }. Can't notify user about unreviewed suggestion.")
+                Status.Declined => $"{ Reply.Declined } Reason: { review.cm }",
+                _ => throw new($"Incorrect status: { review.st }. Can't notify user about unreviewed suggestion.")
             };
 
+            sender.Notify = true;
+
             if (sender.Notify)
-                await _bot.SendPhotoAsync(sender.ChatId, new(review.FileId), message, cancellationToken: ct).ConfigureAwait(false);
+            {
+                Suggestion suggestion = await _repo.GetSuggestionAsync(review.id.Value).ConfigureAwait(false);
+                ChatId chat = new(sender.ChatId);
+                await _bot.SendDocumentAsync(chat, new(suggestion.FileId), message, cancellationToken: ct).ConfigureAwait(false);
+            }
         }
 
-        private async Task SendCommentKeyboardAsync(CallbackQuery callbackQuery, Review review, CancellationToken ct)
+        private async Task SendCommentKeyboardAsync(CallbackQuery callbackQuery, ReviewLite review, CancellationToken ct)
         {
-            review.Comment = Comment.LowQuality;
-            string comment1 = JsonConvert.SerializeObject(review);
+            List<string> comments = Comment.ToList();
+            Dictionary<string, string> map = new();
 
-            review.Comment = Comment.DoesNotFit;
-            string comment2 = JsonConvert.SerializeObject(review);
+            for (int i = 0; i < comments.Count; i++)
+            {
+                review.cm = i;
+                string cm = JsonConvert.SerializeObject(review);
 
-            review.Comment = Comment.TooSimilar;
-            string comment3 = JsonConvert.SerializeObject(review);
+                map.Add(comments[i], cm);
+            }
 
-            review.Comment = Comment.Other;
-            string comment4 = JsonConvert.SerializeObject(review);
-
-            InlineKeyboardMarkup markup = new(new[]
-{
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("Low quality", comment1),
-                    InlineKeyboardButton.WithCallbackData("Does not fit", comment2),
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("Too similar", comment3),
-                    InlineKeyboardButton.WithCallbackData("Other", comment4),
-                }
-            });
-
-            await _bot.EditMessageReplyMarkupAsync(callbackQuery.InlineMessageId, markup, ct).ConfigureAwait(false);
+            InlineKeyboardMarkup markup = new(map
+                .Select(item => new[] { InlineKeyboardButton.WithCallbackData(item.Key, item.Value) }).ToArray());
+            
+            Sender sender = await _repo.GetSuggesterAsync(review.id.Value, ct).ConfigureAwait(false);
+            ChatId chat = new(sender.ChatId);
+            await _bot.EditMessageReplyMarkupAsync(chat, callbackQuery.Message.MessageId, markup, ct).ConfigureAwait(false);
         }
 
         [Route("/test")]

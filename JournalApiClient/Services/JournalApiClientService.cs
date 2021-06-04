@@ -31,6 +31,7 @@ namespace JournalApiClient.Services
                 Query = @"
                     mutation addSuggestion($file_id: String, $sender: SenderInput) {
                       addSuggestion(file_id: $file_id, sender: $sender) {
+                        id
                         file_id
                         made_at
                         user_id
@@ -47,13 +48,13 @@ namespace JournalApiClient.Services
             return result.Data.AddSuggestion;
         }
 
-        public async Task<Suggestion> GetSuggestionAsync(string fileId, CancellationToken ct = default)
+        public async Task<Suggestion> GetSuggestionAsync(int id, CancellationToken ct = default)
         {
             GraphQLRequest request = new()
             {
                 Query = @"
-                    query suggestion($file_id: ID) {
-                      suggestion(file_id: $file_id) {
+                    query suggestion($id: ID) {
+                      suggestion(id: $id) {
                         file_id
                         made_at
                         user_id
@@ -62,7 +63,7 @@ namespace JournalApiClient.Services
                       }
                     }",
 
-                Variables = new { FileId = fileId },
+                Variables = new { id = id },
                 OperationName = "suggestion"
             };
 
@@ -128,9 +129,9 @@ namespace JournalApiClient.Services
             return result.Data;
         }
 
-        public async Task<string> GetStatusAsync(string fileId, CancellationToken ct = default)
+        public async Task<string> GetStatusAsync(int id, CancellationToken ct = default)
         {
-            Suggestion suggestion = await GetSuggestionAsync(fileId, ct).ConfigureAwait(false);
+            Suggestion suggestion = await GetSuggestionAsync(id, ct).ConfigureAwait(false);
             return $"({ suggestion.Status }) { suggestion.Comment }";
         }
 
@@ -139,21 +140,48 @@ namespace JournalApiClient.Services
             throw new NotImplementedException();
         }
 
-        public async Task BanAsync(int userId, CancellationToken ct = default)
+        public async Task<Sender> BanAsync(int suggestionId, CancellationToken ct = default)
         {
             GraphQLRequest request = new()
             {
                 Query = @"
-                    mutation banSender($user_id: ID) {
-                      banSender(user_id: $user_id) {
+                    mutation banSender($suggestion_id: ID) {
+                      banSender(suggestion_id: $suggestion_id) {
+                        username
                       }
                     }",
 
-                Variables = new { user_id = userId },
+                Variables = new { suggestion_id = suggestionId },
                 OperationName = "banSender"
             };
 
-            await GraphQLClient.SendMutationAsync<ResponseSenderType>(request, ct);
+            var result = await GraphQLClient.SendMutationAsync<ResponseSenderType>(request, ct);
+            return result.Data.BanSender;
+        }
+
+        public async Task<Sender> GetSuggesterAsync(int suggestionId, CancellationToken ct = default)
+        {
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    query suggester($suggestion_id: ID) {
+                      suggester(suggestion_id: $suggestion_id) {
+                        user_id
+                        first_name
+                        last_name
+                        username
+                        is_banned
+                        chat_id
+                        notify
+                      }
+                    }",
+
+                Variables = new { suggestion_id = suggestionId },
+                OperationName = "suggester"
+            };
+
+            var result = await GraphQLClient.SendQueryAsync<ResponseSenderType>(request, ct);
+            return result.Data.Suggester;
         }
     }
 }

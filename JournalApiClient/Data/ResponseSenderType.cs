@@ -12,5 +12,7 @@ namespace JournalApiClient.Data
         public Sender BanSender { get; set; }
 
         public Sender Sender { get; set; }
+
+        public Sender Suggester { get; set; }
     }
 }
