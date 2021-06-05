@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -53,7 +54,22 @@ namespace StickerBot.Controllers
                 if (update is null)
                     return;
 
-                _logger.LogInformation($"Received a message of type { update.Type } from { update.Message?.From?.Username }");
+                _logger.LogInformation($"Received an update of type { update.Type }");
+
+                User user = update.Type switch
+                {
+                    UpdateType.Message => update.Message.From,
+                    UpdateType.CallbackQuery => update.CallbackQuery.From,
+                    _ => null
+                };
+
+                if (user is null)
+                    return;
+
+                Sender sender = await _repo.GetSenderAsync(user.Id).ConfigureAwait(false);
+
+                if (sender.IsBanned)
+                    return;
 
                 Task task = update.Type switch
                 {
@@ -64,8 +80,6 @@ namespace StickerBot.Controllers
 
                 if (task is not null)
                     await task;
-                else
-                    await _bot.SendTextMessageAsync(update.Message.Chat.Id, Reply.WrongUpdateType);
             }
             catch (Exception ex)
             {
@@ -75,11 +89,13 @@ namespace StickerBot.Controllers
 
         private async Task HandleMessageAsync(Message message, CancellationToken ct)
         {
+            _logger.LogInformation($"Received a message of type { message.Type } from { message.From.Id }");
+
             Task task = message.Type switch
             {
-                MessageType.Document => HandleDocumentMessageAsync(message, CancellationToken.None),
-                MessageType.Text => HandleTextMessageAsync(message, CancellationToken.None),
-                _ => null
+                MessageType.Document => HandleDocumentMessageAsync(message, ct),
+                MessageType.Text => HandleTextMessageAsync(message, ct),
+                _ => _bot.SendTextMessageAsync(message.Chat.Id, Reply.WrongUpdateType, cancellationToken: ct)
             };
 
             await task;
@@ -104,10 +120,12 @@ namespace StickerBot.Controllers
             string fileId = message.Document.FileId;
 
             Suggestion suggestion = await _repo.CreateEntryAsync(sender, fileId);
-            await _bot.SendTextMessageAsync(message.Chat.Id, $"Id { suggestion.Id }");
-            await _bot.SendTextMessageAsync(message.Chat.Id, Reply.ThankYou);
+            await _bot.SendTextMessageAsync(message.Chat.Id, string.Format(Reply.ThankYou, suggestion.Id));
 
-            await SendForReviewAsync(user, suggestion.Id.Value, fileId, ct).ConfigureAwait(false);
+            Suggestion unreviewed = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
+
+            if (unreviewed is null)
+                await SendForReviewAsync(user, suggestion.Id.Value, fileId, ct).ConfigureAwait(false);
         }
 
         private async Task SendForReviewAsync(User user, int id, string fileId, CancellationToken ct)
@@ -149,43 +167,50 @@ namespace StickerBot.Controllers
             string command = null;
             string argument = null;
 
-            if (message.Text.StartsWith('/'))
-            {
-                string[] msg = message.Text.Split(' ');
-                command = msg[0];
-                argument = msg[1];
-            }
+            bool match = Regex.IsMatch(message.Text, "^\'/[a-z]");
 
-            async Task<string> HandleStatusCommandAsync(string id, CancellationToken ct)
+            if (match)
             {
-                var parsed = int.TryParse(id, out int sug);
-                if (parsed)
-                {
-                    string status = await _repo.GetStatusAsync(sug, ct).ConfigureAwait(false);
-                    return $"{ id } : { status }";
-                }
-                else
-                    return "";
-            }
-
-            async Task<string> HandleSubscribeCommandAsync(CancellationToken ct)
-            {
-                await _repo.SubscribeAsync(ct).ConfigureAwait(false);
-                return Reply.Subscribed;
+                string[] words = message.Text.Split(' ');
+                command = words[0];
+                argument = words.Length > 1 ? words[1] : null;
             }
 
             Task<string> task = command switch
             {
+                "/start" => HandleStartCommandAsync(message.Chat.Id, ct),
                 "/status" => HandleStatusCommandAsync(argument, ct),
-                "/subscribe" => HandleSubscribeCommandAsync(ct),
-                _ => null
+                "/subscribe" => HandleSubscribeCommandAsync(true, message.From.Id, ct),
+                "/unsubscribe" => HandleSubscribeCommandAsync(false, message.From.Id, ct),
+                _ => Task.FromResult(Reply.WrongUpdateType)
             };
 
-            if (task is not null)
+            string response = await task.ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(message.Chat.Id, response).ConfigureAwait(false);
+        }
+
+        private async Task<string> HandleStartCommandAsync(long chatId, CancellationToken ct)
+        {
+            await _bot.SendDocumentAsync(chatId, new(Environment.GetEnvironmentVariable("GuidelinesFileId"))).ConfigureAwait(false);
+            return Reply.Hello;
+        }
+
+        private async Task<string> HandleStatusCommandAsync(string id, CancellationToken ct)
+        {
+            var parsed = int.TryParse(id, out int sug);
+            if (parsed)
             {
-                string response = await task.ConfigureAwait(false);
-                await _bot.SendTextMessageAsync(message.Chat.Id, response).ConfigureAwait(false);
+                string status = await _repo.GetStatusAsync(sug, ct).ConfigureAwait(false);
+                return $"{ id } : { status }";
             }
+            else
+                return "";
+        }
+
+        private async Task<string> HandleSubscribeCommandAsync(bool sub, int userId, CancellationToken ct)
+        {
+            await _repo.SubscribeAsync(sub, ct).ConfigureAwait(false);
+            return sub ? Reply.Subscribed : Reply.Unsubscribed;
         }
 
         private async Task HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken ct)
@@ -196,8 +221,8 @@ namespace StickerBot.Controllers
             {
                 Status.Review => GetNextAsync(ct),
                 Status.Banned => BanAsync(callbackQuery.Id, review.id.Value, ct),
-                Status.Approved => NotifyAsync(review, ct),
-                Status.Declined when review.cm is not null => NotifyAsync(review, ct),
+                Status.Approved => NotifyAsync(callbackQuery, review, ct),
+                Status.Declined when review.cm is not null => NotifyAsync(callbackQuery, review, ct),
                 Status.Declined => SendCommentKeyboardAsync(callbackQuery, review, ct),
                 _ => null
             };
@@ -217,25 +242,28 @@ namespace StickerBot.Controllers
             await _bot.AnswerCallbackQueryAsync(callbackQueryId, $"User { sender.Username } got banned.", cancellationToken: ct).ConfigureAwait(false);
         }
 
-        private async Task NotifyAsync(ReviewLite review, CancellationToken ct)
+        private async Task NotifyAsync(CallbackQuery callbackQuery, ReviewLite review, CancellationToken ct)
         {
+            ChatId reviewChat = new(Environment.GetEnvironmentVariable("ChatId"));
+            await _bot.EditMessageReplyMarkupAsync(reviewChat, callbackQuery.Message.MessageId, null, ct).ConfigureAwait(false);
+
             Sender sender = await _repo.GetSuggesterAsync(review.id.Value, ct).ConfigureAwait(false);
+
+            if (!sender.Notify)
+                return;
+
+            string comment = Comment.ToList()[review.cm.Value];
 
             string message = review.st switch
             {
                 Status.Approved => Reply.Approved,
-                Status.Declined => $"{ Reply.Declined } Reason: { review.cm }",
+                Status.Declined => $"{ Reply.Declined } Reason: { comment }",
                 _ => throw new($"Incorrect status: { review.st }. Can't notify user about unreviewed suggestion.")
             };
 
-            sender.Notify = true;
-
-            if (sender.Notify)
-            {
-                Suggestion suggestion = await _repo.GetSuggestionAsync(review.id.Value).ConfigureAwait(false);
-                ChatId chat = new(sender.ChatId);
-                await _bot.SendDocumentAsync(chat, new(suggestion.FileId), message, cancellationToken: ct).ConfigureAwait(false);
-            }
+            Suggestion suggestion = await _repo.GetSuggestionAsync(review.id.Value).ConfigureAwait(false);
+            ChatId chat = new(sender.ChatId);
+            await _bot.SendDocumentAsync(chat, new(suggestion.FileId), message, cancellationToken: ct).ConfigureAwait(false); // TODO: reply instead of send or not (what is user deletes the msg???
         }
 
         private async Task SendCommentKeyboardAsync(CallbackQuery callbackQuery, ReviewLite review, CancellationToken ct)
@@ -254,8 +282,7 @@ namespace StickerBot.Controllers
             InlineKeyboardMarkup markup = new(map
                 .Select(item => new[] { InlineKeyboardButton.WithCallbackData(item.Key, item.Value) }).ToArray());
             
-            Sender sender = await _repo.GetSuggesterAsync(review.id.Value, ct).ConfigureAwait(false);
-            ChatId chat = new(sender.ChatId);
+            ChatId chat = new(Environment.GetEnvironmentVariable("ChatId"));
             await _bot.EditMessageReplyMarkupAsync(chat, callbackQuery.Message.MessageId, markup, ct).ConfigureAwait(false);
         }
 

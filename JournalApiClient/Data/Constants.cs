@@ -15,9 +15,12 @@ namespace JournalApiClient.Data.Constants
 
     public class Reply
     {
-        public const string ThankYou = "Thank you! To get notified when your submission status changes type '/subscribe'. You can also check the status manually using '/status id' command.";
-        public const string WrongUpdateType = "Please send an image or enter a command.";
-        public const string Subscribed = "You will receive a notification once your submission status is changed.";
+        public const string Hello = "Hey there! Before submitting please check out the guidelines. To submit just send me an uncopressed .jpg or .png file.";
+        public const string ThankYou = "Thank you! To get notified when your submission status changes use subscribe '/subscribe' command. You can also check the status manually using '/status {0}' command.";
+        public const string WrongUpdateType = "Please send an image as a file or enter a command.";
+        public const string WrongCommand = "Please enter a valid command. Type '/' into your chat box to see the list of available commands.";
+        public const string Subscribed = "You will receive a notification once your submission status is changed. Use '/unsubscribe' to cancel.";
+        public const string Unsubscribed = "You will no longer receive notifications. Use '/subscribe' to cancel.";
         public const string Approved = "Your suggestion has been approved!";
         public const string Declined = "Your suggestion has been declined.";
     }

@@ -135,7 +135,7 @@ namespace JournalApiClient.Services
             return $"({ suggestion.Status }) { suggestion.Comment }";
         }
 
-        public Task SubscribeAsync(CancellationToken ct = default)
+        public Task SubscribeAsync(bool sub, CancellationToken ct = default)
         {
             throw new NotImplementedException();
         }
