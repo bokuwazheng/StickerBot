@@ -23,5 +23,8 @@ namespace JournalApiClient.Data.Constants
         public const string Unsubscribed = "You will no longer receive notifications. Use '/subscribe' to cancel.";
         public const string Approved = "Your suggestion has been approved!";
         public const string Declined = "Your suggestion has been declined.";
+        public const string StatusUnavaliable = "Submission status unavaliable.";
+        public const string SuggestionNotFound = "Coundn't find suggestion with id {0}.";
+        public const string InvalidId = "{0} is not a valid id.";
     }
 }

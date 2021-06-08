@@ -125,13 +125,13 @@ namespace StickerBot.Controllers
             Suggestion unreviewed = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
 
             if (unreviewed is null)
-                await SendForReviewAsync(user, suggestion.Id.Value, fileId, ct).ConfigureAwait(false);
+                await SendForReviewAsync(sender, suggestion, ct).ConfigureAwait(false);
         }
 
-        private async Task SendForReviewAsync(User user, int id, string fileId, CancellationToken ct)
+        private async Task SendForReviewAsync(Sender sender, Suggestion suggestion, CancellationToken ct)
         {
             ChatId chat = new(Environment.GetEnvironmentVariable("ChatId"));
-            ReviewLite review = new() { id = id };
+            ReviewLite review = new() { id = suggestion.Id };
 
             review.st = Status.Approved;
             string approved = JsonConvert.SerializeObject(review);
@@ -140,7 +140,7 @@ namespace StickerBot.Controllers
             string declined = JsonConvert.SerializeObject(review);
 
             review.st = Status.Review;
-            string considered = JsonConvert.SerializeObject(review);
+            string reviewed = JsonConvert.SerializeObject(review);
 
             review.st = Status.Banned;
             string banned = JsonConvert.SerializeObject(review);
@@ -155,11 +155,11 @@ namespace StickerBot.Controllers
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("Ban", banned),
-                    InlineKeyboardButton.WithCallbackData("Next", considered),
+                    InlineKeyboardButton.WithCallbackData("Next", reviewed),
                 }
             });
 
-            await _bot.SendDocumentAsync(chat, new(fileId), $"From { user.Username }", replyMarkup: markup, cancellationToken: ct);
+            await _bot.SendDocumentAsync(chat, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
         }
 
         private async Task HandleTextMessageAsync(Message message, CancellationToken ct)
@@ -178,8 +178,8 @@ namespace StickerBot.Controllers
 
             Task<string> task = command switch
             {
-                "/start" => HandleStartCommandAsync(message.Chat.Id, ct),
-                "/status" => HandleStatusCommandAsync(argument, ct),
+                "/start" => Task.FromResult($"{ Reply.Hello } { Environment.GetEnvironmentVariable("Guidelines") }"),
+                "/status" => HandleStatusCommandAsync(argument, message.From.Id, ct),
                 "/subscribe" => HandleSubscribeCommandAsync(true, message.From.Id, ct),
                 "/unsubscribe" => HandleSubscribeCommandAsync(false, message.From.Id, ct),
                 _ => Task.FromResult(Reply.WrongUpdateType)
@@ -189,28 +189,28 @@ namespace StickerBot.Controllers
             await _bot.SendTextMessageAsync(message.Chat.Id, response).ConfigureAwait(false);
         }
 
-        private async Task<string> HandleStartCommandAsync(long chatId, CancellationToken ct)
+        private async Task<string> HandleStatusCommandAsync(string id, int userId, CancellationToken ct)
         {
-            await _bot.SendDocumentAsync(chatId, new(Environment.GetEnvironmentVariable("GuidelinesFileId"))).ConfigureAwait(false);
-            return Reply.Hello;
-        }
-
-        private async Task<string> HandleStatusCommandAsync(string id, CancellationToken ct)
-        {
-            var parsed = int.TryParse(id, out int sug);
+            bool parsed = int.TryParse(id, out int suggestionId);
             if (parsed)
             {
-                string status = await _repo.GetStatusAsync(sug, ct).ConfigureAwait(false);
-                return $"{ id } : { status }";
+                Suggestion suggestion = await _repo.GetSuggestionAsync(suggestionId, ct).ConfigureAwait(false);
+
+                if (suggestion is null)
+                    return Reply.SuggestionNotFound;
+                else if (suggestion.UserId == userId)
+                    return $"{ id } { suggestion.Status } { suggestion.Comment }";
+                else
+                    return Reply.StatusUnavaliable;
             }
             else
-                return "";
+                return string.Format(Reply.InvalidId, id);
         }
 
-        private async Task<string> HandleSubscribeCommandAsync(bool sub, int userId, CancellationToken ct)
+        private async Task<string> HandleSubscribeCommandAsync(bool notify, int userId, CancellationToken ct)
         {
-            await _repo.SubscribeAsync(sub, ct).ConfigureAwait(false);
-            return sub ? Reply.Subscribed : Reply.Unsubscribed;
+            bool subscribed = await _repo.SubscribeAsync(userId, notify, ct).ConfigureAwait(false);
+            return subscribed ? Reply.Subscribed : Reply.Unsubscribed;
         }
 
         private async Task HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken ct)
@@ -233,7 +233,8 @@ namespace StickerBot.Controllers
         private async Task GetNextAsync(CancellationToken ct)
         {
             Suggestion suggestion = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
-            //await SendForReviewAsync(user, fileId, ct).ConfigureAwait(false);
+            Sender sender = await _repo.GetSuggesterAsync(suggestion.Id.Value, ct).ConfigureAwait(false);
+            await SendForReviewAsync(sender, suggestion, ct).ConfigureAwait(false);
         }
 
         private async Task BanAsync(string callbackQueryId, int suggestionId, CancellationToken ct)

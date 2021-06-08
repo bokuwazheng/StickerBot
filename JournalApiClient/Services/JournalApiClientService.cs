@@ -44,7 +44,7 @@ namespace JournalApiClient.Services
                 OperationName = "addSuggestion"
             };
 
-            var result = await GraphQLClient.SendMutationAsync<ResponseSuggestionType>(request, ct);
+            var result = await GraphQLClient.SendMutationAsync<ResponseSuggestionType>(request, ct).ConfigureAwait(false);
             return result.Data.AddSuggestion;
         }
 
@@ -67,7 +67,7 @@ namespace JournalApiClient.Services
                 OperationName = "suggestion"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<ResponseSuggestionType>(request, ct);
+            var result = await GraphQLClient.SendQueryAsync<ResponseSuggestionType>(request, ct).ConfigureAwait(false);
             return result.Data.Suggestion;
         }
 
@@ -91,7 +91,7 @@ namespace JournalApiClient.Services
                 OperationName = "sender"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<ResponseSenderType>(request, ct);
+            var result = await GraphQLClient.SendQueryAsync<ResponseSenderType>(request, ct).ConfigureAwait(false);
             return result.Data.Sender;
         }
 
@@ -113,7 +113,7 @@ namespace JournalApiClient.Services
                 OperationName = "suggestion"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<ResponseSuggestionType>(request, ct);
+            var result = await GraphQLClient.SendQueryAsync<ResponseSuggestionType>(request, ct).ConfigureAwait(false);
             return result.Data.Suggestion;
         }
 
@@ -125,7 +125,7 @@ namespace JournalApiClient.Services
 "
             };
 
-            var result = await GraphQLClient.SendQueryAsync<List<Sender>>(request, ct);
+            var result = await GraphQLClient.SendQueryAsync<List<Sender>>(request, ct).ConfigureAwait(false);
             return result.Data;
         }
 
@@ -135,9 +135,23 @@ namespace JournalApiClient.Services
             return $"({ suggestion.Status }) { suggestion.Comment }";
         }
 
-        public Task SubscribeAsync(bool sub, CancellationToken ct = default)
+        public async Task<bool> SubscribeAsync(int userId, bool notify, CancellationToken ct = default)
         {
-            throw new NotImplementedException();
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    mutation subscribe($user_id: ID, $notify: Boolean) {
+                      subscribe(user_id: $user_id, notify: $notify) {
+                        notify
+                      }
+                    }",
+
+                Variables = new { user_id = userId, notify = notify },
+                OperationName = "subscribe"
+            };
+
+            var result = await GraphQLClient.SendMutationAsync<ResponseSenderType>(request, ct).ConfigureAwait(false);
+            return result.Data.Subscribe.Notify;
         }
 
         public async Task<Sender> BanAsync(int suggestionId, CancellationToken ct = default)
@@ -155,7 +169,7 @@ namespace JournalApiClient.Services
                 OperationName = "banSender"
             };
 
-            var result = await GraphQLClient.SendMutationAsync<ResponseSenderType>(request, ct);
+            var result = await GraphQLClient.SendMutationAsync<ResponseSenderType>(request, ct).ConfigureAwait(false);
             return result.Data.BanSender;
         }
 
@@ -180,7 +194,7 @@ namespace JournalApiClient.Services
                 OperationName = "suggester"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<ResponseSenderType>(request, ct);
+            var result = await GraphQLClient.SendQueryAsync<ResponseSenderType>(request, ct).ConfigureAwait(false);
             return result.Data.Suggester;
         }
     }

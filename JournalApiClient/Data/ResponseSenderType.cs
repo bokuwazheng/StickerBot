@@ -14,5 +14,7 @@ namespace JournalApiClient.Data
         public Sender Sender { get; set; }
 
         public Sender Suggester { get; set; }
+
+        public Sender Subscribe { get; set; }
     }
 }
