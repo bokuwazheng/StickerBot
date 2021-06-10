@@ -59,16 +59,16 @@ namespace StickerBot.Controllers
                 User user = update.Type switch
                 {
                     UpdateType.Message => update.Message.From,
-                    UpdateType.CallbackQuery => update.CallbackQuery.From,
+                    UpdateType.CallbackQuery => update.CallbackQuery.From, // TODO: why???
                     _ => null
                 };
 
-                if (user is null)
+                if (user is null || user.IsBot)
                     return;
 
                 Sender sender = await _repo.GetSenderAsync(user.Id).ConfigureAwait(false);
 
-                if (sender.IsBanned)
+                if (sender is { IsBanned: true }) // TODO: test with sender NULL
                     return;
 
                 Task task = update.Type switch
@@ -79,7 +79,7 @@ namespace StickerBot.Controllers
                 };
 
                 if (task is not null)
-                    await task;
+                    await task.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -98,13 +98,13 @@ namespace StickerBot.Controllers
                 _ => _bot.SendTextMessageAsync(message.Chat.Id, Reply.WrongUpdateType, cancellationToken: ct)
             };
 
-            await task;
+            await task.ConfigureAwait(false);
         }
 
         private async Task HandleDocumentMessageAsync(Message message, CancellationToken ct)
         {
             string ext = Path.GetExtension(message.Document.FileName).ToLower();
-            if (ext is not ".jpg" or ".png")
+            if (ext is not ".jpg" or ".jpeg" or ".png")
                 return;
 
             User user = message.From;
@@ -119,19 +119,20 @@ namespace StickerBot.Controllers
 
             string fileId = message.Document.FileId;
 
-            Suggestion suggestion = await _repo.CreateEntryAsync(sender, fileId);
-            await _bot.SendTextMessageAsync(message.Chat.Id, string.Format(Reply.ThankYou, suggestion.Id));
+            Suggestion suggestion = await _repo.CreateSuggestionAsync(sender, fileId).ConfigureAwait(false);
+            string text = string.Format(Reply.ThankYou, suggestion.Id);
+            await _bot.SendTextMessageAsync(message.Chat.Id, text, cancellationToken: ct).ConfigureAwait(false);
 
-            //Suggestion unreviewed = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
+            Suggestion unreviewed = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
 
-            //if (unreviewed is null)
-            //    await SendForReviewAsync(sender, suggestion, ct).ConfigureAwait(false);
+            if (unreviewed is null)
+                await SendForReviewAsync(sender, suggestion, ct).ConfigureAwait(false);
         }
 
         private async Task SendForReviewAsync(Sender sender, Suggestion suggestion, CancellationToken ct)
         {
-            ChatId chat = new(Environment.GetEnvironmentVariable("ChatId")); // TODO: put chat id in review?
-            ReviewLite model = new(suggestion.Id.Value);
+            int chatId = int.Parse(Environment.GetEnvironmentVariable("ChatId"));
+            ReviewLite model = new(suggestion.Id.Value, chatId);
             Dictionary<string, string> map = new();
             ReviewResult[] values = Enum.GetValues<ReviewResult>();
 
@@ -145,7 +146,7 @@ namespace StickerBot.Controllers
             InlineKeyboardMarkup markup = new(map
                 .Select(item => new[] { InlineKeyboardButton.WithCallbackData(item.Key, item.Value) }).ToArray());
 
-            await _bot.SendDocumentAsync(chat, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
+            await _bot.SendDocumentAsync(chatId, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
         }
 
         private async Task HandleTextMessageAsync(Message message, CancellationToken ct)
@@ -153,7 +154,7 @@ namespace StickerBot.Controllers
             string command = null;
             string argument = null;
 
-            bool match = Regex.IsMatch(message.Text, "^\'/[a-z]");
+            bool match = Regex.IsMatch(message.Text, @"^\/[a-z]");
 
             if (match)
             {
@@ -165,9 +166,10 @@ namespace StickerBot.Controllers
             Task<string> task = command switch
             {
                 "/start" => Task.FromResult($"{ Reply.Hello } { Environment.NewLine } { Environment.GetEnvironmentVariable("Guidelines") }"),
-                "/status" => HandleStatusCommandAsync(argument, message.From.Id, ct),
-                "/subscribe" => HandleSubscribeCommandAsync(true, message.From.Id, ct),
-                "/unsubscribe" => HandleSubscribeCommandAsync(false, message.From.Id, ct),
+                "/status" => GetStatusAsync(argument, message.From.Id, ct),
+                "/subscribe" => ToggleSubscriptionAsync(true, message.From.Id, ct),
+                "/unsubscribe" => ToggleSubscriptionAsync(false, message.From.Id, ct),
+                "/next" => GetNextAsync(ct),
                 _ => Task.FromResult(Reply.WrongUpdateType)
             };
 
@@ -175,25 +177,25 @@ namespace StickerBot.Controllers
             await _bot.SendTextMessageAsync(message.Chat.Id, response).ConfigureAwait(false);
         }
 
-        private async Task<string> HandleStatusCommandAsync(string id, int userId, CancellationToken ct)
+        private async Task<string> GetStatusAsync(string id, int userId, CancellationToken ct)
         {
             bool parsed = int.TryParse(id, out int suggestionId);
             if (parsed)
             {
-                Suggestion suggestion = await _repo.GetSuggestionAsync(suggestionId, ct).ConfigureAwait(false);
+                Review review = await _repo.GetReviewAsync(suggestionId, ct).ConfigureAwait(false);
 
-                if (suggestion is null)
-                    return Reply.SuggestionNotFound;
-                else if (suggestion.UserId == userId)
-                    return $"{ id } { suggestion.Status } { suggestion.Comment }";
-                else
-                    return Reply.StatusUnavaliable;
+                return review switch
+                {
+                    null => string.Format(Reply.SuggestionNotFound, id),
+                    not null when review.UserId == userId => $"{ id } { review.ResultCode.ToDescriptionOrString() }",
+                    _ => Reply.StatusUnavaliable
+                };
             }
             else
                 return string.Format(Reply.InvalidId, id);
         }
 
-        private async Task<string> HandleSubscribeCommandAsync(bool notify, int userId, CancellationToken ct)
+        private async Task<string> ToggleSubscriptionAsync(bool notify, int userId, CancellationToken ct)
         {
             Sender sender = await _repo.GetSenderAsync(userId, ct).ConfigureAwait(false);
 
@@ -209,37 +211,39 @@ namespace StickerBot.Controllers
         private async Task HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken ct)
         {
             ReviewLite review = JsonConvert.DeserializeObject<ReviewLite>(callbackQuery.Data);
-            ChatId reviewChat = new(Environment.GetEnvironmentVariable("ChatId"));
+            Review submitted = await _repo.AddReviewAsync(new(review), ct).ConfigureAwait(false);
+            Sender sender = await _repo.GetSuggesterAsync(review.Id, ct).ConfigureAwait(false);
 
             Task task = review.Result switch
             {
-                //ReviewResult.Skipped => GetNextAsync(ct),
-                ReviewResult.Banned => BanAsync(callbackQuery.Id, review.Id, ct),
-                ReviewResult.Approved => NotifyAsync(callbackQuery, review, ct),
-                //ReviewResult.Declined when review.cm is not null => NotifyAsync(callbackQuery, review, ct),
-                //ReviewResult.Declined => SendCommentKeyboardAsync(callbackQuery, review, ct),
-                _ => null
+                not ReviewResult.None or ReviewResult.Banned when sender.Notify => NotifyAsync(review, ct),
+                ReviewResult.Banned => BanAsync(callbackQuery.Id, sender, ct),
+                _ => null,
             };
 
-            await task;
+            if (task is not null)
+                await task.ConfigureAwait(false);
 
-            await _bot.EditMessageReplyMarkupAsync(reviewChat, callbackQuery.Message.MessageId, null, ct).ConfigureAwait(false);
+            await _bot.EditMessageReplyMarkupAsync(review.By, callbackQuery.Message.MessageId, null, ct).ConfigureAwait(false);
+            await GetNextAsync(ct).ConfigureAwait(false);
         }
 
-        private async Task GetNextAsync(CancellationToken ct)
+        private async Task<string> GetNextAsync(CancellationToken ct)
         {
             Suggestion suggestion = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
             Sender sender = await _repo.GetSuggesterAsync(suggestion.Id.Value, ct).ConfigureAwait(false);
             await SendForReviewAsync(sender, suggestion, ct).ConfigureAwait(false);
+            return "NEXT";
         }
 
-        private async Task BanAsync(string callbackQueryId, int suggestionId, CancellationToken ct)
+        private async Task BanAsync(string callbackQueryId, Sender sender, CancellationToken ct)
         {
-            Sender sender = await _repo.BanAsync(suggestionId, ct).ConfigureAwait(false);
+            sender.IsBanned = true;
+            await _repo.UpdateSenderAsync(sender, ct).ConfigureAwait(false);
             await _bot.AnswerCallbackQueryAsync(callbackQueryId, $"User { sender.Username } got banned.", cancellationToken: ct).ConfigureAwait(false);
         }
 
-        private async Task NotifyAsync(CallbackQuery callbackQuery, ReviewLite review, CancellationToken ct)
+        private async Task NotifyAsync(ReviewLite review, CancellationToken ct)
         {
             Sender sender = await _repo.GetSuggesterAsync(review.Id, ct).ConfigureAwait(false);
 
@@ -276,7 +280,7 @@ namespace StickerBot.Controllers
 
                 string fileId = "FILEIDIDIDD";
 
-                Suggestion suggestion = await _repo.CreateEntryAsync(sender, fileId);
+                Suggestion suggestion = await _repo.CreateSuggestionAsync(sender, fileId);
             }
             catch (Exception ex)
             {

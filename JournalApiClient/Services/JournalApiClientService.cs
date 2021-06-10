@@ -24,7 +24,7 @@ namespace JournalApiClient.Services
         protected HttpClient HttpClient { get; }
         protected IGraphQLClient GraphQLClient { get; }
 
-        public async Task<Suggestion> CreateEntryAsync(Sender sender, string fileId, CancellationToken ct = default)
+        public async Task<Suggestion> CreateSuggestionAsync(Sender sender, string fileId, CancellationToken ct = default)
         {
             GraphQLRequest request = new()
             {
@@ -35,8 +35,6 @@ namespace JournalApiClient.Services
                         file_id
                         made_at
                         user_id
-                        status
-                        comment
                       }
                     }",
 
@@ -55,11 +53,10 @@ namespace JournalApiClient.Services
                 Query = @"
                     query suggestion($id: ID) {
                       suggestion(id: $id) {
+                        id                        
                         file_id
                         made_at
                         user_id
-                        status
-                        comment
                       }
                     }",
 
@@ -83,6 +80,7 @@ namespace JournalApiClient.Services
                         last_name
                         username
                         is_banned
+                        chat_id
                         notify
                       }
                     }",
@@ -100,21 +98,20 @@ namespace JournalApiClient.Services
             GraphQLRequest request = new()
             {
                 Query = @"
-                    query suggestion() {
-                      suggestion() {
+                    query newSuggestion {
+                      newSuggestion {
+                        id
                         file_id
                         made_at
                         user_id
-                        status
-                        comment
                       }
                     }",
 
-                OperationName = "suggestion"
+                OperationName = "newSuggestion"
             };
 
             var result = await GraphQLClient.SendQueryAsync<ResponseSuggestionType>(request, ct).ConfigureAwait(false);
-            return result.Data.Suggestion;
+            return result.Data.NewSuggestion;
         }
 
         public async Task<List<Sender>> GetSendersAsync(CancellationToken ct)
@@ -129,10 +126,27 @@ namespace JournalApiClient.Services
             return result.Data;
         }
 
-        public async Task<string> GetStatusAsync(int id, CancellationToken ct = default)
+        public async Task<Review> GetReviewAsync(int suggestionId, CancellationToken ct = default)
         {
-            Suggestion suggestion = await GetSuggestionAsync(id, ct).ConfigureAwait(false);
-            return $"({ suggestion.Status }) { suggestion.Comment }";
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    query review($suggestion_id: ID) {
+                      review(suggestion_id: $suggestion_id) {
+                        id
+                        suggestion_id
+                        user_id
+                        submitted_at
+                        result_code
+                      }
+                    }",
+
+                Variables = new { SuggestionId = suggestionId },
+                OperationName = "review"
+            };
+
+            var result = await GraphQLClient.SendQueryAsync<ReviewResponseType>(request, ct).ConfigureAwait(false);
+            return result.Data.Review;
         }
 
         public async Task<bool> SubscribeAsync(int userId, bool notify, CancellationToken ct = default)
@@ -142,6 +156,12 @@ namespace JournalApiClient.Services
                 Query = @"
                     mutation subscribe($user_id: ID, $notify: Boolean) {
                       subscribe(user_id: $user_id, notify: $notify) {
+                        user_id
+                        first_name
+                        last_name
+                        username
+                        is_banned
+                        chat_id
                         notify
                       }
                     }",
@@ -161,7 +181,12 @@ namespace JournalApiClient.Services
                 Query = @"
                     mutation updateSender($sender: SenderInput) {
                       updateSender(sender: $sender) {
+                        user_id
+                        first_name
+                        last_name
+                        username
                         is_banned
+                        chat_id
                         notify
                       }
                     }",
@@ -181,7 +206,13 @@ namespace JournalApiClient.Services
                 Query = @"
                     mutation banSender($suggestion_id: ID) {
                       banSender(suggestion_id: $suggestion_id) {
+                        user_id
+                        first_name
+                        last_name
                         username
+                        is_banned
+                        chat_id
+                        notify
                       }
                     }",
 
@@ -216,6 +247,29 @@ namespace JournalApiClient.Services
 
             var result = await GraphQLClient.SendQueryAsync<ResponseSenderType>(request, ct).ConfigureAwait(false);
             return result.Data.Suggester;
+        }
+
+        public async Task<Review> AddReviewAsync(Review review, CancellationToken ct = default)
+        {
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    mutation addReview($review: ReviewInput) {
+                      addReview(review: $review) {
+                        id
+                        suggestion_id
+                        user_id
+                        submitted_at
+                        result_code
+                      }
+                    }",
+
+                Variables = new { review },
+                OperationName = "addReview"
+            };
+
+            var result = await GraphQLClient.SendMutationAsync<ReviewResponseType>(request, ct).ConfigureAwait(false);
+            return result.Data.AddReview;
         }
     }
 }
