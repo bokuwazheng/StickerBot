@@ -43,15 +43,18 @@ namespace JournalApiClient.Data
     {
         public int UserId { get; set; }
         public string FileId { get; set; }
-        public Status? Status { get; set; }
+        public ReviewResult? Status { get; set; }
         public string Comment { get; set; }
         public bool Notify { get; set; }
     }
 
     public class ReviewLite
     {
-        public int? id { get; set; }
-        public Status? st { get; set; }
-        public int? cm { get; set; }
+        public ReviewLite() { }
+
+        public ReviewLite(int suggestionId) => Id = suggestionId;
+
+        public int Id { get; set; }
+        public ReviewResult Result { get; set; }
     }
 }

@@ -154,6 +154,26 @@ namespace JournalApiClient.Services
             return result.Data.Subscribe.Notify;
         }
 
+        public async Task<Sender> UpdateSenderAsync(Sender sender, CancellationToken ct = default)
+        {
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    mutation updateSender($sender: SenderInput) {
+                      updateSender(sender: $sender) {
+                        is_banned
+                        notify
+                      }
+                    }",
+
+                Variables = new { sender },
+                OperationName = "updateSender"
+            };
+
+            var result = await GraphQLClient.SendMutationAsync<ResponseSenderType>(request, ct).ConfigureAwait(false);
+            return result.Data.UpdateSender;
+        }
+
         public async Task<Sender> BanAsync(int suggestionId, CancellationToken ct = default)
         {
             GraphQLRequest request = new()

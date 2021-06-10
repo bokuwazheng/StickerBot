@@ -20,6 +20,8 @@ namespace JournalApiClient.Data.Constants
         public const string WrongUpdateType = "Please send an image as a file or enter a command.";
         public const string WrongCommand = "Please enter a valid command. Type '/' into your chat box to see the list of available commands.";
         public const string Subscribed = "You will receive a notification once your submission status is changed. Use '/unsubscribe' to cancel.";
+        public const string AlreadySubscribed = "You are already subscribed to notifications. In case you wanted to unsubscribe use '/unsubscribe'.";
+        public const string AlreadyUnsubscribed = "You are not currently subscribed to notifications. In case you wanted to subscribe use '/subscribe'.";
         public const string Unsubscribed = "You will no longer receive notifications. Use '/subscribe' to cancel.";
         public const string Approved = "Your suggestion has been approved!";
         public const string Declined = "Your suggestion has been declined.";

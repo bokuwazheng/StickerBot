@@ -1,6 +1,6 @@
 ﻿namespace JournalApiClient.Data
 {
-    public class Sender
+    public class Sender // TODO: read-only properties must have 'init' instead of 'set'
     {
         public int UserId { get; set; }
         public string FirstName { get; set; }

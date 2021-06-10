@@ -14,5 +14,6 @@ namespace JournalApiClient.Services
         Task<Sender> GetSuggesterAsync(int suggestionId, CancellationToken ct = default);
         Task<Suggestion> GetNewSuggestionAsync(CancellationToken ct = default);
         Task<Sender> BanAsync(int userId, CancellationToken ct = default);
+        Task<Sender> UpdateSenderAsync(Sender sender, CancellationToken ct = default);
     }
 }

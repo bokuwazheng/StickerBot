@@ -1,31 +1,50 @@
-﻿namespace JournalApiClient.Data.Enums
+﻿using System.ComponentModel;
+
+namespace JournalApiClient.Data.Enums
 {
-    public enum Status
+    public enum ReviewResult : byte
     {
         /// <summary>
-        /// In queue for review.
+        /// Skipped.
         /// </summary>
-        New,
-
-        /// <summary>
-        /// Sent for review.
-        /// </summary>
-        Review,
+        [Description("No result.")]
+        None = 0,
 
         /// <summary>
         /// Most probably will be added to the sticker pack.
         /// </summary>
-        Approved,
+        [Description("Very nice!")]
+        Approved = 1,
+
+        /// <summary>
+        /// Personal preferences or other reasons.
+        /// </summary>
+        [Description("Personal preferences or other reasons.")]
+        Other = 20,
+
+        /// <summary>
+        /// Low quality.
+        /// </summary>
+        [Description("Low quality.")]
+        LowQuality = 21,
 
         /// <summary>
         /// Does not fit.
         /// </summary>
-        Declined,
+        [Description("Does not fit.")]
+        DoesNotFit = 22,
 
         /// <summary>
-        /// Inappropriate content. Unlike other values, does not represent corresponding PostgreSQL enum value.
+        /// Too similar to an existing sticker.
         /// </summary>
-        Banned
+        [Description("Too similar to an existing sticker.")]
+        TooSimilar = 23,
+
+        /// <summary>
+        /// Inappropriate content.
+        /// </summary>
+        [Description("Banned.")]
+        Banned = 30
     }
 
     public enum Stage

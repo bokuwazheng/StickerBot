@@ -16,5 +16,8 @@ namespace JournalApiClient.Data
         public Sender Suggester { get; set; }
 
         public Sender Subscribe { get; set; }
+
+        [JsonProperty(NamingStrategyType = typeof(DefaultNamingStrategy))]
+        public Sender UpdateSender { get; set; }
     }
 }
