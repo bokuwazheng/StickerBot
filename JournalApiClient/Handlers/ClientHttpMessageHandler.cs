@@ -46,16 +46,22 @@ namespace JournalApiClient.Handlers
 
             request.Version = HttpVersion.Version20;
             request.Headers.Authorization = new("Bearer", _jwt?.Token);
+
+            string requestJson = await request.Content.ReadAsStringAsync().ConfigureAwait(false);
+            requestJson = requestJson.Replace(@"\r\n", Environment.NewLine);
+            _logger.LogInformation(requestJson);
+
             HttpResponseMessage response = await base.SendAsync(request, ct).ConfigureAwait(true);
 
-            string r = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            string responseJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            _logger.LogInformation(responseJson);
 
             if (!response.IsSuccessStatusCode)
-                throw new Exception($"{ response.StatusCode } { response.ReasonPhrase } { r }");
+                throw new Exception($"{ response.StatusCode } { response.ReasonPhrase } { responseJson }");
             else // TODO: Must be a 400-500 code.
             {
-                if (r.Contains("error"))
-                    _logger.LogError(r);
+                if (responseJson.Contains("error"))
+                    _logger.LogError(responseJson);
             }
 
             return response;

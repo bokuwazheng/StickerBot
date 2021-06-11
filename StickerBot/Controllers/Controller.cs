@@ -27,14 +27,12 @@ namespace StickerBot.Controllers
         private readonly ILogger<Controller> _logger;
         private readonly ITelegramBotClient _bot;
         private readonly IJournalApiClient _repo;
-        private readonly IReviewStateService _review;
 
-        public Controller(ILogger<Controller> logger, ITelegramBotClient client, IJournalApiClient journal, IReviewStateService review)
+        public Controller(ILogger<Controller> logger, ITelegramBotClient client, IJournalApiClient journal)
         {
             _logger = logger;
             _bot = client;
             _repo = journal;
-            _review = review;
         }
 
         [HttpGet]
@@ -74,7 +72,7 @@ namespace StickerBot.Controllers
                 Task task = update.Type switch
                 {
                     UpdateType.Message => HandleMessageAsync(update.Message, CancellationToken.None),
-                    UpdateType.CallbackQuery => HandleCallbackQuery(update.CallbackQuery, CancellationToken.None),
+                    UpdateType.CallbackQuery => HandleCallbackQueryAsync(update.CallbackQuery, CancellationToken.None),
                     _ => null
                 };
 
@@ -183,11 +181,12 @@ namespace StickerBot.Controllers
             if (parsed)
             {
                 Review review = await _repo.GetReviewAsync(suggestionId, ct).ConfigureAwait(false);
+                Suggestion suggestion = await _repo.GetSuggestionAsync(suggestionId, ct).ConfigureAwait(false);
 
                 return review switch
                 {
                     null => string.Format(Reply.SuggestionNotFound, id),
-                    not null when review.UserId == userId => $"{ id } { review.ResultCode.ToDescriptionOrString() }",
+                    not null when suggestion.UserId == userId => $"{ id } { review.ResultCode.ToDescriptionOrString() }",
                     _ => Reply.StatusUnavaliable
                 };
             }
@@ -208,7 +207,7 @@ namespace StickerBot.Controllers
             return updatedSender.Notify ? Reply.Subscribed : Reply.Unsubscribed;
         }
 
-        private async Task HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken ct)
+        private async Task HandleCallbackQueryAsync(CallbackQuery callbackQuery, CancellationToken ct)
         {
             ReviewLite review = JsonConvert.DeserializeObject<ReviewLite>(callbackQuery.Data);
             Review submitted = await _repo.AddReviewAsync(new(review), ct).ConfigureAwait(false);

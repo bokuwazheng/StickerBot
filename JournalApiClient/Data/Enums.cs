@@ -1,8 +1,11 @@
-﻿using System.ComponentModel;
+﻿using JournalApiClient.Json;
+using Newtonsoft.Json;
+using System.ComponentModel;
 
 namespace JournalApiClient.Data.Enums
 {
-    public enum ReviewResult : byte
+    [JsonConverter(typeof(CustomStringEnumConverter))]
+    public enum ReviewResult
     {
         /// <summary>
         /// Skipped.
@@ -45,14 +48,5 @@ namespace JournalApiClient.Data.Enums
         /// </summary>
         [Description("Banned.")]
         Banned = 30
-    }
-
-    public enum Stage
-    {
-        Initialized,
-        Status,
-        Comment,
-        Notify,
-        Finished
     }
 }

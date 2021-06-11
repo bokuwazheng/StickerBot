@@ -1,7 +1,6 @@
 using GraphQL.Client.Abstractions;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
-using JournalApiClient.Data;
 using JournalApiClient.Handlers;
 using JournalApiClient.Services;
 using Microsoft.AspNetCore.Builder;
@@ -66,15 +65,14 @@ namespace StickerBot
                     GraphQLHttpClientOptions options = new() { EndPoint = baseAddress };
 
                     NewtonsoftJsonSerializer serializer = new();
-                    serializer.JsonSerializerSettings.ContractResolver = new DefaultContractResolver() 
+                    serializer.JsonSerializerSettings.ContractResolver = new DefaultContractResolver()
                     { 
-                        NamingStrategy = new SnakeCaseNamingStrategy() 
+                        NamingStrategy = new SnakeCaseNamingStrategy()
                     };
                     serializer.JsonSerializerSettings.Formatting = Formatting.Indented;
 
                     return new(options, serializer, httpClient);
                 })
-                .AddSingleton<IReviewStateService, ReviewStateService>()
                 .AddTransient<ITelegramBotClient>(s =>
                 {
                     TelegramBotClient client = new(token);
