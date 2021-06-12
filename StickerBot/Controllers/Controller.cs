@@ -138,7 +138,7 @@ namespace StickerBot.Controllers
             {
                 model.Result = result;
                 string resultJson = JsonConvert.SerializeObject(model);
-                map.Add(result.ToDescriptionOrString(), resultJson);
+                map.Add(result.ToDescription(), resultJson);
             }
 
             InlineKeyboardMarkup markup = new(map
@@ -177,21 +177,38 @@ namespace StickerBot.Controllers
 
         private async Task<string> GetStatusAsync(string id, int userId, CancellationToken ct)
         {
-            bool parsed = int.TryParse(id, out int suggestionId);
-            if (parsed)
+            string reply;
+            bool bySuggestionId = int.TryParse(id, out int suggestionId);
+
+            if (bySuggestionId)
             {
-                Review review = await _repo.GetReviewAsync(suggestionId, ct).ConfigureAwait(false);
                 Suggestion suggestion = await _repo.GetSuggestionAsync(suggestionId, ct).ConfigureAwait(false);
 
-                return review switch
+                if (suggestion is null)
+                    reply = string.Format(Reply.SuggestionNotFound, suggestionId);
+                else if (suggestion.UserId == userId)
                 {
-                    null => string.Format(Reply.SuggestionNotFound, id),
-                    not null when suggestion.UserId == userId => $"{ id } { review.ResultCode.ToDescriptionOrString() }",
-                    _ => Reply.StatusUnavaliable
-                };
+                    Review review = await _repo.GetReviewAsync(suggestionId, ct).ConfigureAwait(false);
+
+                    reply = review is null
+                        ? Reply.NotYetReviewed
+                        : $"{ id } { review.ResultCode.ToDescription() }";
+                }
+                else
+                    reply = Reply.StatusUnavaliable;
             }
-            else
-                return string.Format(Reply.InvalidId, id);
+            else // TODO: Find sender's last submission and then look for review to be able to tell 'no submission' case from 'not reviewed' case. ???
+            {
+                Review review = await _repo.GetNewReviewAsync(userId, ct).ConfigureAwait(false);
+
+                string result = review is null
+                    ? Reply.NoSubmissionsOrNotReview
+                    : $"{ id } { review.ResultCode.ToDescription() }";
+
+                reply = string.Format(Reply.UseStatusN, result);
+            }
+
+            return reply;
         }
 
         private async Task<string> ToggleSubscriptionAsync(bool notify, int userId, CancellationToken ct)
@@ -223,7 +240,7 @@ namespace StickerBot.Controllers
             if (task is not null)
                 await task.ConfigureAwait(false);
 
-            await _bot.EditMessageReplyMarkupAsync(review.By, callbackQuery.Message.MessageId, null, ct).ConfigureAwait(false);
+            await _bot.EditMessageCaptionAsync(review.By, callbackQuery.Message.MessageId, review.Result.ToDescription(), null, ct).ConfigureAwait(false);
             await GetNextAsync(ct).ConfigureAwait(false);
         }
 
@@ -249,7 +266,7 @@ namespace StickerBot.Controllers
             if (!sender.Notify)
                 return;
 
-            string comment = review.Result.ToDescriptionOrString();
+            string comment = review.Result.ToDescription();
             string message = review.Result is ReviewResult.Approved ? Reply.Approved : Reply.Declined;
             string caption = $"{ message } { comment }";
 

@@ -8,6 +8,9 @@ namespace JournalApiClient.Data
         [JsonProperty(NamingStrategyType = typeof(DefaultNamingStrategy))]
         public Review AddReview { get; set; }
 
+        [JsonProperty(NamingStrategyType = typeof(DefaultNamingStrategy))]
+        public Review NewReview { get; set; }
+
         public Review Review { get; set; }
     }
 }

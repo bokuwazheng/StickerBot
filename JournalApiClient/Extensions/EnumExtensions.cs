@@ -6,7 +6,12 @@ namespace JournalApiClient.Extensions
 {
     public static class EnumExtensions
     {
-        public static string ToDescriptionOrString(this Enum value) => value
+        /// <summary>
+        /// Returns description if enum member has corresponding attribute. Otherwise returns name of enum member.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static string ToDescription(this Enum value) => value
             .GetType()
             .GetField(value.ToString())
             .GetCustomAttributes(typeof(DescriptionAttribute), false)

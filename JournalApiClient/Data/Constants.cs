@@ -27,6 +27,9 @@ namespace JournalApiClient.Data.Constants
         public const string Declined = "Your suggestion has been declined.";
         public const string StatusUnavaliable = "Submission status unavaliable.";
         public const string SuggestionNotFound = "Coundn't find suggestion with id {0}.";
+        public const string NotYetReviewed = "Suggestion {0} has not yet been reviewed.";
         public const string InvalidId = "{0} is not a valid id.";
+        public const string NoSubmissionsOrNotReview = "Either no submissions or the latest submission is not yet reviewed.";
+        public const string UseStatusN = "{0} Use '/status N' (where N is the id of your submission) to check the status of a specific submission.";
     }
 }

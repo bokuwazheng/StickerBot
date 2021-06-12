@@ -18,7 +18,6 @@ namespace JournalApiClient.Data
         public int SuggestionId { get; set; }
         public int UserId { get; set; }
         public DateTime SubmittedAt { get; set; }
-
         public ReviewResult ResultCode { get; set; }
     }
 

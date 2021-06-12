@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using GraphQL;
 using GraphQL.Client.Abstractions;
 using JournalApiClient.Data;
-using JournalApiClient.Data.Enums;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace JournalApiClient.Services
@@ -147,6 +146,29 @@ namespace JournalApiClient.Services
 
             var result = await GraphQLClient.SendQueryAsync<ReviewResponseType>(request, ct).ConfigureAwait(false);
             return result.Data.Review;
+        }
+
+        public async Task<Review> GetNewReviewAsync(int userId, CancellationToken ct = default)
+        {
+            GraphQLRequest request = new()
+            {
+                Query = @"
+                    query newReview($user_id: ID) {
+                      newReview(user_id: $user_id) {
+                        id
+                        suggestion_id
+                        user_id
+                        submitted_at
+                        result_code
+                      }
+                    }",
+
+                Variables = new { UserId = userId },
+                OperationName = "newReview"
+            };
+
+            var result = await GraphQLClient.SendQueryAsync<ReviewResponseType>(request, ct).ConfigureAwait(false);
+            return result.Data.NewReview;
         }
 
         public async Task<bool> SubscribeAsync(int userId, bool notify, CancellationToken ct = default)
