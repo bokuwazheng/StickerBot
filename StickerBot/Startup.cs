@@ -76,7 +76,12 @@ namespace StickerBot
                 .AddTransient<ITelegramBotClient>(s =>
                 {
                     TelegramBotClient client = new(token);
-                    //client.SetWebhookAsync(webhook); // TODO: Uncomment after tests.
+
+                    // In Development use: ngrok http https://localhost:5001
+                    // Set webhook: https://api.telegram.org/bot<bot_token>/setWebhook?url=<https_link_provided_by_ngrok>
+                    if (_env.IsProduction())
+                        client.SetWebhookAsync(webhook);
+
                     return client;
                 })
                 .AddTransient<IJournalApiClient, JournalApiClientService>()
