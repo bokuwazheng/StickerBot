@@ -1,13 +1,12 @@
-﻿using JournalApiClient.Data.Enums;
-using System;
+﻿using System;
 
 namespace JournalApiClient.Data
 {
-    public class Suggestion // TODO: Make non-nullabe.
+    public record Suggestion
     {
-        public int? Id { get; set; }
-        public string FileId { get; set; }
-        public DateTime? MadeAt { get; set; }
-        public int? UserId { get; set; }
+        public int Id { get; init; }
+        public string FileId { get; init; }
+        public DateTime MadeAt { get; init; }
+        public int UserId { get; init; }
     }
 }

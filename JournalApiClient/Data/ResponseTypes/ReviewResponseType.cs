@@ -1,16 +1,16 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
-namespace JournalApiClient.Data
+namespace JournalApiClient.Data.ResponseTypes
 {
-    public class ResponseSuggestionType
+    public class ReviewResponseType
     {
         [JsonProperty(NamingStrategyType = typeof(DefaultNamingStrategy))]
-        public Suggestion AddSuggestion { get; set; }
+        public Review AddReview { get; set; }
 
         [JsonProperty(NamingStrategyType = typeof(DefaultNamingStrategy))]
-        public Suggestion NewSuggestion { get; set; }
+        public Review NewReview { get; set; }
 
-        public Suggestion Suggestion { get; set; }
+        public Review Review { get; set; }
     }
 }

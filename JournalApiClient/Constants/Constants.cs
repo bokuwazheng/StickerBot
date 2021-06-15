@@ -1,18 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-
-namespace JournalApiClient.Data.Constants
+﻿namespace JournalApiClient.Data.Constants
 {
-    public class Comment
-    {
-        public const string LowQuality = "Low quality.";
-        public const string DoesNotFit = "Does not fit.";
-        public const string TooSimilar = "Too similar to an existing sticker.";
-        public const string Other = "Personal preferences or other reasons.";
-
-        public static List<string> ToList() => typeof(Comment).GetFields().Select(x => (string)x.GetValue(null)).ToList();
-    }
-
     public class Reply
     {
         public const string Hello = "Hey there! Before submitting please check out the guidelines. To submit just send me an uncopressed .jpg or .png file.";
@@ -25,11 +12,14 @@ namespace JournalApiClient.Data.Constants
         public const string Unsubscribed = "You will no longer receive notifications. Use '/subscribe' to cancel.";
         public const string Approved = "Your suggestion has been approved!";
         public const string Declined = "Your suggestion has been declined.";
+        public const string StatusChanged = "Submission (id {0}) status changed. {1}";
         public const string StatusUnavaliable = "Submission status unavaliable.";
+        public const string Status = "Submission id {0}. {1}";
         public const string SuggestionNotFound = "Coundn't find suggestion with id {0}.";
         public const string NotYetReviewed = "Suggestion {0} has not yet been reviewed.";
         public const string InvalidId = "{0} is not a valid id.";
-        public const string NoSubmissionsOrNotReview = "Either no submissions or the latest submission is not yet reviewed.";
+        public const string NoSubmissionsOrNotReviewed = "Your latest submission have not yet been reviewed.";
         public const string UseStatusN = "{0} Use '/status N' (where N is the id of your submission) to check the status of a specific submission.";
+        public const string NoNewSuggestions = "No new suggestions found.";
     }
 }

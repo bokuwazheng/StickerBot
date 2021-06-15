@@ -28,20 +28,37 @@ namespace StickerBot.Controllers
         private readonly ITelegramBotClient _bot;
         private readonly IJournalApiClient _repo;
 
-        public Controller(ILogger<Controller> logger, ITelegramBotClient client, IJournalApiClient journal)
+        public Controller(ILogger<Controller> logger, ITelegramBotClient bot, IJournalApiClient repo)
         {
             _logger = logger;
-            _bot = client;
-            _repo = journal;
+            _bot = bot;
+            _repo = repo;
         }
 
         [HttpGet]
-        public Task TestAsync()
+        public Task TestGetAsync()
         {
-            _logger.LogInformation("Test");
+            _logger.LogInformation("Test GET");
 
             string token = Environment.GetEnvironmentVariable("ChatId");
             return _bot.SendTextMessageAsync(new(token), "I'M ALIVE!!");
+        }
+
+
+        [Route("/test")]
+        [HttpPost]
+        public async Task TestPostAsync()
+        {
+            _logger.LogInformation("Test POST");
+
+            try
+            {
+                await GetNextAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.Message);
+            }
         }
 
         [HttpPost]
@@ -57,7 +74,7 @@ namespace StickerBot.Controllers
                 User user = update.Type switch
                 {
                     UpdateType.Message => update.Message.From,
-                    UpdateType.CallbackQuery => update.CallbackQuery.From, // TODO: why???
+                    UpdateType.CallbackQuery => update.CallbackQuery.From,
                     _ => null
                 };
 
@@ -66,8 +83,22 @@ namespace StickerBot.Controllers
 
                 Sender sender = await _repo.GetSenderAsync(user.Id).ConfigureAwait(false);
 
-                if (sender is { IsBanned: true }) // TODO: test with sender NULL
+                if (sender is { IsBanned: true })
                     return;
+
+                if (sender is null)
+                {
+                    sender = new()
+                    {
+                        UserId = user.Id,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        Username = user.Username,
+                        ChatId = update.Message.Chat.Id
+                    };
+
+                    await _repo.AddSenderAsync(sender, CancellationToken.None).ConfigureAwait(false);
+                }
 
                 Task task = update.Type switch
                 {
@@ -105,32 +136,23 @@ namespace StickerBot.Controllers
             if (ext is not ".jpg" or ".jpeg" or ".png")
                 return;
 
-            User user = message.From;
-            Sender sender = new()
-            {
-                UserId = user.Id,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Username = user.Username,
-                ChatId = message.Chat.Id
-            };
-
+            int userId = message.From.Id;
             string fileId = message.Document.FileId;
 
-            Suggestion suggestion = await _repo.CreateSuggestionAsync(sender, fileId).ConfigureAwait(false);
+            Suggestion suggestion = await _repo.AddSuggestionAsync(fileId, userId, ct).ConfigureAwait(false);
             string text = string.Format(Reply.ThankYou, suggestion.Id);
-            await _bot.SendTextMessageAsync(message.Chat.Id, text, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, text, cancellationToken: ct).ConfigureAwait(false);
 
             Suggestion unreviewed = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
 
-            if (unreviewed is null)
-                await SendForReviewAsync(sender, suggestion, ct).ConfigureAwait(false);
+            if (suggestion.Id == unreviewed.Id)
+                await SendForReviewAsync(suggestion, ct).ConfigureAwait(false);
         }
 
-        private async Task SendForReviewAsync(Sender sender, Suggestion suggestion, CancellationToken ct)
+        private async Task SendForReviewAsync(Suggestion suggestion, CancellationToken ct)
         {
             int chatId = int.Parse(Environment.GetEnvironmentVariable("ChatId"));
-            ReviewLite model = new(suggestion.Id.Value, chatId);
+            ReviewLite model = new(suggestion.Id, chatId);
             Dictionary<string, string> map = new();
             ReviewResult[] values = Enum.GetValues<ReviewResult>();
 
@@ -144,6 +166,7 @@ namespace StickerBot.Controllers
             InlineKeyboardMarkup markup = new(map
                 .Select(item => new[] { InlineKeyboardButton.WithCallbackData(item.Key, item.Value) }).ToArray());
 
+            Sender sender = await _repo.GetSuggesterAsync(suggestion.Id, ct).ConfigureAwait(false);
             await _bot.SendDocumentAsync(chatId, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
         }
 
@@ -161,23 +184,24 @@ namespace StickerBot.Controllers
                 argument = words.Length > 1 ? words[1] : null;
             }
 
+            var guidelinesUrl = Environment.GetEnvironmentVariable("Guidelines");
+
             Task<string> task = command switch
             {
-                "/start" => Task.FromResult($"{ Reply.Hello } { Environment.NewLine } { Environment.GetEnvironmentVariable("Guidelines") }"),
+                "/start" => Task.FromResult($"{ Reply.Hello } { Environment.NewLine } { guidelinesUrl }"),
                 "/status" => GetStatusAsync(argument, message.From.Id, ct),
                 "/subscribe" => ToggleSubscriptionAsync(true, message.From.Id, ct),
                 "/unsubscribe" => ToggleSubscriptionAsync(false, message.From.Id, ct),
-                "/next" => GetNextAsync(ct),
+                "/guidelines" => Task.FromResult(guidelinesUrl),
                 _ => Task.FromResult(Reply.WrongUpdateType)
             };
 
             string response = await task.ConfigureAwait(false);
-            await _bot.SendTextMessageAsync(message.Chat.Id, response).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(message.Chat.Id, response, cancellationToken: ct).ConfigureAwait(false);
         }
 
         private async Task<string> GetStatusAsync(string id, int userId, CancellationToken ct)
         {
-            string reply;
             bool bySuggestionId = int.TryParse(id, out int suggestionId);
 
             if (bySuggestionId)
@@ -185,30 +209,27 @@ namespace StickerBot.Controllers
                 Suggestion suggestion = await _repo.GetSuggestionAsync(suggestionId, ct).ConfigureAwait(false);
 
                 if (suggestion is null)
-                    reply = string.Format(Reply.SuggestionNotFound, suggestionId);
-                else if (suggestion.UserId == userId)
-                {
-                    Review review = await _repo.GetReviewAsync(suggestionId, ct).ConfigureAwait(false);
+                    return string.Format(Reply.SuggestionNotFound, suggestionId);
 
-                    reply = review is null
-                        ? Reply.NotYetReviewed
-                        : $"{ id } { review.ResultCode.ToDescription() }";
-                }
-                else
-                    reply = Reply.StatusUnavaliable;
+                if (suggestion.UserId != userId)
+                    return Reply.StatusUnavaliable;
+
+                Review review = await _repo.GetReviewAsync(suggestionId, ct).ConfigureAwait(false);
+
+                return review is null || review.ResultCode is ReviewResult.None
+                    ? Reply.NotYetReviewed
+                    : string.Format(Reply.Status, id, review.ResultCode.ToDescription());
             }
             else // TODO: Find sender's last submission and then look for review to be able to tell 'no submission' case from 'not reviewed' case. ???
             {
                 Review review = await _repo.GetNewReviewAsync(userId, ct).ConfigureAwait(false);
 
                 string result = review is null
-                    ? Reply.NoSubmissionsOrNotReview
-                    : $"{ id } { review.ResultCode.ToDescription() }";
+                    ? Reply.NoSubmissionsOrNotReviewed
+                    : string.Format(Reply.Status, review.SuggestionId, review.ResultCode.ToDescription());
 
-                reply = string.Format(Reply.UseStatusN, result);
+                return string.Format(Reply.UseStatusN, result);
             }
-
-            return reply;
         }
 
         private async Task<string> ToggleSubscriptionAsync(bool notify, int userId, CancellationToken ct)
@@ -218,7 +239,7 @@ namespace StickerBot.Controllers
             if (sender.Notify == notify)
                 return notify ? Reply.AlreadySubscribed : Reply.AlreadyUnsubscribed;
 
-            sender.Notify = notify;
+            sender = sender with { Notify = notify };
 
             Sender updatedSender = await _repo.UpdateSenderAsync(sender, ct).ConfigureAwait(false);
             return updatedSender.Notify ? Reply.Subscribed : Reply.Unsubscribed;
@@ -228,11 +249,11 @@ namespace StickerBot.Controllers
         {
             ReviewLite review = JsonConvert.DeserializeObject<ReviewLite>(callbackQuery.Data);
             Review submitted = await _repo.AddReviewAsync(new(review), ct).ConfigureAwait(false);
-            Sender sender = await _repo.GetSuggesterAsync(review.Id, ct).ConfigureAwait(false);
+            Sender sender = await _repo.GetSuggesterAsync(review.SuggestionId, ct).ConfigureAwait(false);
 
             Task task = review.Result switch
             {
-                not ReviewResult.None or ReviewResult.Banned when sender.Notify => NotifyAsync(review, ct),
+                not (ReviewResult.None or ReviewResult.Banned) when sender.Notify => NotifyAsync(review, ct),
                 ReviewResult.Banned => BanAsync(callbackQuery.Id, sender, ct),
                 _ => null,
             };
@@ -240,68 +261,40 @@ namespace StickerBot.Controllers
             if (task is not null)
                 await task.ConfigureAwait(false);
 
-            await _bot.EditMessageCaptionAsync(review.By, callbackQuery.Message.MessageId, review.Result.ToDescription(), null, ct).ConfigureAwait(false);
+            if (review.Result is not ReviewResult.None)
+                await _bot.EditMessageCaptionAsync(review.SuggesterId, callbackQuery.Message.MessageId, review.Result.ToDescription(), null, ct).ConfigureAwait(false);
+
             await GetNextAsync(ct).ConfigureAwait(false);
         }
 
-        private async Task<string> GetNextAsync(CancellationToken ct)
+        private async Task GetNextAsync(CancellationToken ct)
         {
             Suggestion suggestion = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
-            Sender sender = await _repo.GetSuggesterAsync(suggestion.Id.Value, ct).ConfigureAwait(false);
-            await SendForReviewAsync(sender, suggestion, ct).ConfigureAwait(false);
-            return "NEXT";
+
+            if (suggestion is null)
+                return;
+
+            await SendForReviewAsync(suggestion, ct).ConfigureAwait(false);
         }
 
         private async Task BanAsync(string callbackQueryId, Sender sender, CancellationToken ct)
         {
-            sender.IsBanned = true;
+            sender = sender with { IsBanned = true };
             await _repo.UpdateSenderAsync(sender, ct).ConfigureAwait(false);
             await _bot.AnswerCallbackQueryAsync(callbackQueryId, $"User { sender.Username } got banned.", cancellationToken: ct).ConfigureAwait(false);
         }
 
         private async Task NotifyAsync(ReviewLite review, CancellationToken ct)
         {
-            Sender sender = await _repo.GetSuggesterAsync(review.Id, ct).ConfigureAwait(false);
+            Sender sender = await _repo.GetSuggesterAsync(review.SuggestionId, ct).ConfigureAwait(false);
 
             if (!sender.Notify)
                 return;
 
-            string comment = review.Result.ToDescription();
-            string message = review.Result is ReviewResult.Approved ? Reply.Approved : Reply.Declined;
-            string caption = $"{ message } { comment }";
+            string caption = string.Format(Reply.StatusChanged, review.SuggestionId, review.Result.ToDescription());
 
-            Suggestion suggestion = await _repo.GetSuggestionAsync(review.Id).ConfigureAwait(false);
-            ChatId chat = new(sender.ChatId); // TODO: isn't it the same as using sender.UserId? 
-            await _bot.SendDocumentAsync(chat, new(suggestion.FileId), caption, cancellationToken: ct).ConfigureAwait(false);
-        }
-
-        [Route("/test")]
-        [HttpPost]
-        public async Task Echo2Async()
-        {
-            try
-            {
-                _logger.LogInformation("Echo2");
-
-                string token = Environment.GetEnvironmentVariable("ChatId");
-
-                Sender sender = new()
-                {
-                    UserId = 123123,
-                    FirstName = "Zheng",
-                    LastName = null,
-                    Username = "bokuwazheng",
-                    ChatId = 123123
-                };
-
-                string fileId = "FILEIDIDIDD";
-
-                Suggestion suggestion = await _repo.CreateSuggestionAsync(sender, fileId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex.Message);
-            }
+            Suggestion suggestion = await _repo.GetSuggestionAsync(review.SuggestionId).ConfigureAwait(false);
+            await _bot.SendDocumentAsync(sender.UserId, new(suggestion.FileId), caption, cancellationToken: ct).ConfigureAwait(false);
         }
     }
 }
