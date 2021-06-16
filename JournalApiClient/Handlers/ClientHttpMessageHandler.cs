@@ -37,9 +37,9 @@ namespace JournalApiClient.Handlers
 
                 Uri uri = new($"{baseAddress}/login");
                 using HttpRequestMessage jwtRequest = new(HttpMethod.Get, uri) { Content = content };
-                using HttpResponseMessage jwtResponse = await base.SendAsync(jwtRequest, ct);
+                using HttpResponseMessage jwtResponse = await base.SendAsync(jwtRequest, ct).ConfigureAwait(false);
 
-                Stream responseStream = await jwtResponse.Content.ReadAsStreamAsync(ct);
+                Stream responseStream = await jwtResponse.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 await using (responseStream)
                     _jwt = await JsonSerializer.DeserializeAsync<Jwt>(responseStream);
             }
@@ -51,13 +51,13 @@ namespace JournalApiClient.Handlers
             requestJson = requestJson.Replace(@"\r\n", Environment.NewLine);
             _logger.LogInformation(requestJson);
 
-            HttpResponseMessage response = await base.SendAsync(request, ct).ConfigureAwait(true);
+            HttpResponseMessage response = await base.SendAsync(request, ct).ConfigureAwait(false);
 
             string responseJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             _logger.LogInformation(responseJson);
 
             if (!response.IsSuccessStatusCode)
-                throw new Exception($"{ response.StatusCode } { response.ReasonPhrase } { responseJson }");
+                throw new($"{ response.StatusCode } { response.ReasonPhrase } { responseJson }");
             else // TODO: Must be a 400-500 code.
             {
                 if (responseJson.Contains("error"))
