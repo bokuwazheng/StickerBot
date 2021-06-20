@@ -16,6 +16,10 @@ namespace JournalApiClient.Data
 
         public int Id { get; init; }
         public int SuggestionId { get; init; }
+
+        /// <summary>
+        /// User that created the review.
+        /// </summary>
         public int UserId { get; init; }
         public DateTime SubmittedAt { get; init; }
         public ReviewResult ResultCode { get; init; }

@@ -10,43 +10,43 @@ namespace JournalApiClient.Data.Enums
         /// <summary>
         /// Skipped.
         /// </summary>
-        [Description("No decision yet.")]
+        [Description("Skip")]
         None = 0,
 
         /// <summary>
         /// Most probably will be added to the sticker pack.
         /// </summary>
-        [Description("Approved!")]
+        [Description("Approve")]
         Approved = 1,
 
         /// <summary>
         /// Personal preferences or other reasons.
         /// </summary>
-        [Description("Declined: Personal preferences or other reasons.")]
+        [Description("Personal preferences or other reasons")]
         Other = 20,
 
         /// <summary>
         /// Low quality.
         /// </summary>
-        [Description("Declined: Low quality.")]
+        [Description("Low quality")]
         LowQuality = 21,
 
         /// <summary>
         /// Does not fit.
         /// </summary>
-        [Description("Declined: Does not fit.")]
+        [Description("Does not fit")]
         DoesNotFit = 22,
 
         /// <summary>
         /// Too similar to an existing sticker.
         /// </summary>
-        [Description("Declined: Too similar to an existing sticker.")]
+        [Description("Too similar to an existing sticker")]
         TooSimilar = 23,
 
         /// <summary>
         /// Inappropriate content.
         /// </summary>
-        [Description("Banned.")]
+        [Description("Ban")]
         Banned = 30
     }
 }

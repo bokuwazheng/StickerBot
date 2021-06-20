@@ -51,7 +51,7 @@ namespace JournalApiClient.Services
             GraphQLRequest request = new()
             {
                 Query = @"
-                    query addSender($sender: SenderInput) {
+                    mutation addSender($sender: SenderInput) {
                       addSender(sender: $sender) {
                         user_id
                         first_name
