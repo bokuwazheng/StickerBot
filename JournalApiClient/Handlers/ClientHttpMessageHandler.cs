@@ -58,7 +58,7 @@ namespace JournalApiClient.Handlers
 
             if (!response.IsSuccessStatusCode)
                 throw new($"{ response.StatusCode } { response.ReasonPhrase } { responseJson }");
-            else // TODO: Must be a 400-500 code.
+            else
             {
                 if (responseJson.Contains("error"))
                     _logger.LogError(responseJson);

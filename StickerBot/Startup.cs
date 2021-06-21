@@ -35,8 +35,8 @@ namespace StickerBot
         {
             static string GetEV(string key) => Environment.GetEnvironmentVariable(key);
 
-            Uri baseAddress = new(GetEV("ApiBaseAddress"));
-            TimeSpan timeout = TimeSpan.FromMinutes(Convert.ToInt32(Environment.GetEnvironmentVariable("ApiTimeout")));
+            string baseAddress = GetEV("ApiBaseAddress");
+            TimeSpan timeout = TimeSpan.FromMinutes(Convert.ToInt32(GetEV("ApiTimeout")));
             string token = GetEV("BotToken");
             string webhook = GetEV("WebhookUrl");
 
@@ -50,7 +50,7 @@ namespace StickerBot
                 .AddHttpClient<JournalApiClientService>((s, h) =>
                 {
                     h.DefaultRequestVersion = HttpVersion.Version20;
-                    h.BaseAddress = baseAddress;
+                    h.BaseAddress = new(baseAddress);
                     h.Timeout = timeout;
                 })
                 .AddHttpMessageHandler<ClientHttpMessageHandler>();
@@ -62,7 +62,7 @@ namespace StickerBot
                     IHttpClientFactory factory = s.GetRequiredService<IHttpClientFactory>();
                     HttpClient httpClient = factory.CreateClient(nameof(JournalApiClientService));
 
-                    GraphQLHttpClientOptions options = new() { EndPoint = baseAddress };
+                    GraphQLHttpClientOptions options = new() { EndPoint = new($"{baseAddress}/graphql") };
 
                     NewtonsoftJsonSerializer serializer = new();
                     serializer.JsonSerializerSettings.ContractResolver = new DefaultContractResolver()
