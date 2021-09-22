@@ -17,6 +17,8 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using Microsoft.Extensions.Options;
+using StickerBot.Options;
 
 namespace StickerBot.Controllers
 {
@@ -27,18 +29,20 @@ namespace StickerBot.Controllers
         private readonly ILogger<Controller> _logger;
         private readonly ITelegramBotClient _bot;
         private readonly IJournalApiClient _repo;
+        private readonly BotOptions _options;
 
-        public Controller(ILogger<Controller> logger, ITelegramBotClient bot, IJournalApiClient repo)
+        public Controller(ILogger<Controller> logger, ITelegramBotClient bot, IJournalApiClient repo, IOptions<BotOptions> options)
         {
             _logger = logger;
             _bot = bot;
             _repo = repo;
+            _options = options.Value;
         }
 
         [HttpPost]
-        public async Task HanleAsync([FromBody] Update update)
+        public async Task HanleAsync([FromBody] Update update) // TODO: consider returning IActionResult
         {
-            try
+            try // TODO: consider using Middleware instead of try-catch
             {
                 if (update is null)
                     return;
@@ -77,7 +81,7 @@ namespace StickerBot.Controllers
                     await _repo.AddSenderAsync(sender, CancellationToken.None).ConfigureAwait(false);
                 }
 
-                Task task = update.Type switch
+                Task task = update.Type switch // TODO: consider making all this more readable and flexible
                 {
                     UpdateType.Message => HandleMessageAsync(update.Message, CancellationToken.None),
                     UpdateType.CallbackQuery => HandleCallbackQueryAsync(update.CallbackQuery, CancellationToken.None),
@@ -128,8 +132,7 @@ namespace StickerBot.Controllers
 
         private async Task SendForReviewAsync(Suggestion suggestion, CancellationToken ct)
         {
-            int chatId = int.Parse(Environment.GetEnvironmentVariable("ChatId"));
-            ReviewLite model = new(suggestion.Id, chatId);
+            ReviewLite model = new(suggestion.Id, _options.ChatId);
             Dictionary<string, string> map = new();
             ReviewResult[] values = Enum.GetValues<ReviewResult>();
 
@@ -144,7 +147,7 @@ namespace StickerBot.Controllers
                 .Select(item => new[] { InlineKeyboardButton.WithCallbackData(item.Key, item.Value) }).ToArray());
 
             Sender sender = await _repo.GetSuggesterAsync(suggestion.Id, ct).ConfigureAwait(false);
-            await _bot.SendDocumentAsync(chatId, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
+            await _bot.SendDocumentAsync(_options.ChatId, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
         }
 
         private async Task HandleTextMessageAsync(Message message, CancellationToken ct)
@@ -152,7 +155,7 @@ namespace StickerBot.Controllers
             string command = null;
             string argument = null;
 
-            bool match = Regex.IsMatch(message.Text, @"^\/[a-z]");
+            bool match = Regex.IsMatch(message.Text, @"^\/[a-z]"); // TODO: consider using .StartsWith
 
             if (match)
             {
@@ -161,15 +164,13 @@ namespace StickerBot.Controllers
                 argument = words.Length > 1 ? words[1] : null;
             }
 
-            var guidelinesUrl = Environment.GetEnvironmentVariable("Guidelines");
-
             Task<string> task = command switch
             {
                 "/start" => GreetAsync(message.From.Id, ct),
                 "/status" => GetStatusAsync(argument, message.From.Id, ct),
                 "/subscribe" => ToggleSubscriptionAsync(true, message.From.Id, ct),
                 "/unsubscribe" => ToggleSubscriptionAsync(false, message.From.Id, ct),
-                "/guidelines" => Task.FromResult(string.Format(Reply.Guidelines, guidelinesUrl)),
+                "/guidelines" => Task.FromResult(string.Format(Reply.Guidelines, _options.Guidelines)),
                 _ => Task.FromResult(Reply.WrongUpdateType)
             };
 
@@ -179,10 +180,8 @@ namespace StickerBot.Controllers
 
         private async Task<string> GreetAsync(int userId, CancellationToken ct)
         {
-            var guidelinesUrl = Environment.GetEnvironmentVariable("Guidelines");
-
             await _bot.SendTextMessageAsync(userId, Reply.Hello, cancellationToken: ct).ConfigureAwait(false);
-            return string.Format(Reply.BeforeSubmitting, guidelinesUrl);
+            return string.Format(Reply.BeforeSubmitting, _options.Guidelines);
         }
 
         private async Task<string> GetStatusAsync(string id, int userId, CancellationToken ct)

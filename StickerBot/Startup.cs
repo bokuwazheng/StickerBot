@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using StickerBot.Options;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -21,7 +23,7 @@ namespace StickerBot
 {
     public class Startup
     {
-        private IWebHostEnvironment _env;
+        private readonly IWebHostEnvironment _env;
 
         public Startup(IConfiguration configuration, IWebHostEnvironment env)
         {
@@ -33,12 +35,7 @@ namespace StickerBot
 
         public void ConfigureServices(IServiceCollection services)
         {
-            static string GetEV(string key) => Environment.GetEnvironmentVariable(key);
-
-            string baseAddress = GetEV("ApiBaseAddress");
-            TimeSpan timeout = TimeSpan.FromMinutes(Convert.ToInt32(GetEV("ApiTimeout")));
-            string token = GetEV("BotToken");
-            string webhook = GetEV("WebhookUrl");
+            BotOptions botOptions = Configuration.Get<BotOptions>();
 
             services
                 .AddSwaggerGen(c =>
@@ -50,8 +47,8 @@ namespace StickerBot
                 .AddHttpClient<JournalApiClientService>((s, h) =>
                 {
                     h.DefaultRequestVersion = HttpVersion.Version20;
-                    h.BaseAddress = new(baseAddress);
-                    h.Timeout = timeout;
+                    h.BaseAddress = new(botOptions.ApiBaseAddress);
+                    h.Timeout = TimeSpan.FromMinutes(botOptions.ApiTimeout);
                 })
                 .AddHttpMessageHandler<ClientHttpMessageHandler>();
 
@@ -62,7 +59,7 @@ namespace StickerBot
                     IHttpClientFactory factory = s.GetRequiredService<IHttpClientFactory>();
                     HttpClient httpClient = factory.CreateClient(nameof(JournalApiClientService));
 
-                    GraphQLHttpClientOptions options = new() { EndPoint = new($"{baseAddress}/graphql") };
+                    GraphQLHttpClientOptions options = new() { EndPoint = new($"{ botOptions.ApiBaseAddress }/graphql") };
 
                     NewtonsoftJsonSerializer serializer = new();
                     serializer.JsonSerializerSettings.ContractResolver = new DefaultContractResolver()
@@ -75,12 +72,12 @@ namespace StickerBot
                 })
                 .AddTransient<ITelegramBotClient>(s =>
                 {
-                    TelegramBotClient client = new(token);
+                    TelegramBotClient client = new(botOptions.BotToken);
 
                     // In Development use: ngrok http https://localhost:5001
                     // Set webhook: https://api.telegram.org/bot<bot_token>/setWebhook?url=<https_link_provided_by_ngrok>
                     if (_env.IsProduction())
-                        client.SetWebhookAsync(webhook);
+                        client.SetWebhookAsync(botOptions.WebhookUrl);
 
                     return client;
                 })
