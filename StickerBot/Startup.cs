@@ -70,6 +70,8 @@ namespace StickerBot
             services
                 .AddTransient<ClientHttpMessageHandler>()
                 .AddTransient<IJournalApiClient, JournalApiClientService>()
+                .AddTransient<CommandHandler>()
+                .AddTransient<SuggestionHandler>()
                 .AddControllers()
                 .AddNewtonsoftJson();
         }
