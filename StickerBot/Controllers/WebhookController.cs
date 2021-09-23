@@ -22,16 +22,14 @@ using StickerBot.Options;
 
 namespace StickerBot.Controllers
 {
-    [ApiController]
-    [Route("[controller]")]
-    public class Controller : ControllerBase
+    public class WebhookController : ControllerBase
     {
-        private readonly ILogger<Controller> _logger;
+        private readonly ILogger<WebhookController> _logger;
         private readonly ITelegramBotClient _bot;
         private readonly IJournalApiClient _repo;
         private readonly BotOptions _options;
 
-        public Controller(ILogger<Controller> logger, ITelegramBotClient bot, IJournalApiClient repo, IOptions<BotOptions> options)
+        public WebhookController(ILogger<WebhookController> logger, ITelegramBotClient bot, IJournalApiClient repo, IOptions<BotOptions> options)
         {
             _logger = logger;
             _bot = bot;
@@ -40,61 +38,56 @@ namespace StickerBot.Controllers
         }
 
         [HttpPost]
-        public async Task HanleAsync([FromBody] Update update) // TODO: consider returning IActionResult
+        public async Task<IActionResult> Post([FromBody] Update update)
         {
-            try // TODO: consider using Middleware instead of try-catch
+            if (update is null)
+                return Ok();
+
+            _logger.LogInformation($"Received an update of type { update.Type }");
+
+            User user = update.Type switch
             {
-                if (update is null)
-                    return;
+                UpdateType.Message => update.Message.From,
+                UpdateType.CallbackQuery => update.CallbackQuery.From,
+                _ => null
+            };
 
-                _logger.LogInformation($"Received an update of type { update.Type }");
+            if (user is null || user.IsBot)
+                return Ok();
 
-                User user = update.Type switch
+            Sender sender = await _repo.GetSenderAsync(user.Id).ConfigureAwait(false);
+
+            if (sender is { IsBanned: true })
+            {
+                await _bot.SendTextMessageAsync(user.Id, Reply.Banned).ConfigureAwait(false);
+                return Ok();
+            }
+
+            if (sender is null)
+            {
+                sender = new()
                 {
-                    UpdateType.Message => update.Message.From,
-                    UpdateType.CallbackQuery => update.CallbackQuery.From,
-                    _ => null
+                    UserId = user.Id,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Username = user.Username,
+                    ChatId = update.Message.Chat.Id
                 };
 
-                if (user is null || user.IsBot)
-                    return;
-
-                Sender sender = await _repo.GetSenderAsync(user.Id).ConfigureAwait(false);
-
-                if (sender is { IsBanned: true })
-                {
-                    await _bot.SendTextMessageAsync(user.Id, Reply.Banned).ConfigureAwait(false);
-                    return;
-                }
-
-                if (sender is null)
-                {
-                    sender = new()
-                    {
-                        UserId = user.Id,
-                        FirstName = user.FirstName,
-                        LastName = user.LastName,
-                        Username = user.Username,
-                        ChatId = update.Message.Chat.Id
-                    };
-
-                    await _repo.AddSenderAsync(sender, CancellationToken.None).ConfigureAwait(false);
-                }
-
-                Task task = update.Type switch // TODO: consider making all this more readable and flexible
-                {
-                    UpdateType.Message => HandleMessageAsync(update.Message, CancellationToken.None),
-                    UpdateType.CallbackQuery => HandleCallbackQueryAsync(update.CallbackQuery, CancellationToken.None),
-                    _ => null
-                };
-
-                if (task is not null)
-                    await task.ConfigureAwait(false);
+                await _repo.AddSenderAsync(sender, CancellationToken.None).ConfigureAwait(false);
             }
-            catch (Exception ex)
+
+            Task task = update.Type switch // TODO: consider making all this more readable and flexible
             {
-                _logger.LogError(ex.Message);
-            }
+                UpdateType.Message => HandleMessageAsync(update.Message, CancellationToken.None),
+                UpdateType.CallbackQuery => HandleCallbackQueryAsync(update.CallbackQuery, CancellationToken.None),
+                _ => null
+            };
+
+            if (task is not null)
+                await task.ConfigureAwait(false);
+
+            return Ok();
         }
 
         private async Task HandleMessageAsync(Message message, CancellationToken ct)

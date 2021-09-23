@@ -1,5 +1,7 @@
 ﻿using JournalApiClient.Data;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using StickerBot.Options;
 using System;
 using System.IO;
 using System.Net;
@@ -9,33 +11,31 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JournalApiClient.Handlers
+namespace StickerBot.Handlers
 {
     public class ClientHttpMessageHandler : DelegatingHandler
     {
         private Jwt _jwt;
         private readonly ILogger<ClientHttpMessageHandler> _logger;
+        private readonly BotOptions _botOptions;
 
-        public ClientHttpMessageHandler(ILogger<ClientHttpMessageHandler> logger)
+        public ClientHttpMessageHandler(ILogger<ClientHttpMessageHandler> logger, IOptions<BotOptions> options)
         {
             _logger = logger;
+            _botOptions = options.Value;
         }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             if (_jwt is null)
             {
-                string baseAddress = Environment.GetEnvironmentVariable("ApiBaseAddress");
-                string login = Environment.GetEnvironmentVariable("BotLogin");
-                string password = Environment.GetEnvironmentVariable("BotPassword");
-
-                object credentials = new { login, password };
+                object credentials = new { _botOptions.BotLogin, _botOptions.BotPassword };
                 byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(credentials);
 
                 ByteArrayContent content = new(bytes);
                 content.Headers.ContentType = new(MediaTypeNames.Application.Json);
 
-                Uri uri = new($"{baseAddress}/login");
+                Uri uri = new($"{ _botOptions.ApiBaseAddress }/login");
                 using HttpRequestMessage jwtRequest = new(HttpMethod.Get, uri) { Content = content };
                 using HttpResponseMessage jwtResponse = await base.SendAsync(jwtRequest, ct).ConfigureAwait(false);
 

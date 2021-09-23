@@ -13,7 +13,7 @@
         public string BotToken { get; set; }
 
         /// <summary>
-        /// Webhook URL.
+        /// Webhook URL for Telegram Bot API.
         /// </summary>
         public string WebhookUrl { get; set; }
 
