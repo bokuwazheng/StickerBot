@@ -29,7 +29,8 @@ namespace StickerBot.Services
             using var scope = _services.CreateScope();
             var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
 
-            var webhookAddress = $"{_botConfig.WebhookUrl}/bot/{_botConfig.BotToken}";
+            //var webhookAddress = $"{_botConfig.WebhookUrl}/bot/{_botConfig.BotToken}";
+            var webhookAddress = _botConfig.WebhookUrl;
 
             _logger.LogInformation("Setting webhook: ", webhookAddress);
             

@@ -12,15 +12,11 @@ namespace JournalApiClient.Services
 {
     public class JournalApiClientService : IJournalApiClient
     {
-        public JournalApiClientService(IServiceProvider provider)
+        public JournalApiClientService(IGraphQLClient graphQlClient)
         {
-            HttpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
-            HttpClient = HttpClientFactory.CreateClient(nameof(JournalApiClientService));
-            GraphQLClient = provider.GetRequiredService<IGraphQLClient>();
+            GraphQLClient = graphQlClient;
         }
 
-        protected IHttpClientFactory HttpClientFactory { get; }
-        protected HttpClient HttpClient { get; }
         protected IGraphQLClient GraphQLClient { get; }
 
         public async Task<Review> AddReviewAsync(Review review, CancellationToken ct = default)

@@ -9,27 +9,37 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using StickerBot.Services;
+using System.ComponentModel.DataAnnotations;
+using StickerBot.Options;
+using Microsoft.Extensions.Options;
 
 namespace StickerBot.Controllers
 {
+    [ApiController]
+    [Route("[controller]")]
     public class WebhookController : ControllerBase
     {
         private readonly ILogger<WebhookController> _logger;
         private readonly ITelegramBotClient _bot;
         private readonly IJournalApiClient _repo;
+        private readonly BotOptions _botOptions;
 
-        public WebhookController(ILogger<WebhookController> logger, ITelegramBotClient bot, IJournalApiClient repo)
+        public WebhookController(ILogger<WebhookController> logger, ITelegramBotClient bot, IJournalApiClient repo, IOptions<BotOptions> botOptions)
         {
             _logger = logger;
             _bot = bot;
             _repo = repo;
+            _botOptions = botOptions.Value;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] Update update, [FromServices] CommandHandler commandHander, [FromServices] SuggestionHandler suggestionHandler)
+        public async Task<IActionResult> Post(
+            [FromBody] Update update, 
+            [FromServices] CommandHandler commandHander, 
+            [FromServices] SuggestionHandler suggestionHandler)
         {
             if (update is null)
-                return Ok();
+                return BadRequest();
 
             _logger.LogInformation("Received an update of type {type}", update.Type);
 

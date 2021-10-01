@@ -1,6 +1,7 @@
 using GraphQL.Client.Abstractions;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
+using JournalApiClient.Data;
 using JournalApiClient.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -15,6 +16,7 @@ using StickerBot.Options;
 using StickerBot.Services;
 using System;
 using System.Net;
+using System.Text.Json;
 using Telegram.Bot;
 
 namespace StickerBot
@@ -41,19 +43,18 @@ namespace StickerBot
                 services.AddHostedService<WebhookService>();
 
             services
-                .AddHttpClient(nameof(WebhookController))
-                .AddTypedClient<ITelegramBotClient>(httpClient => new TelegramBotClient(_botOptions.BotToken, httpClient))
-                .AddHttpMessageHandler<ClientHttpMessageHandler>();
+                .AddSingleton<Jwt>()
+                .AddHostedService<AuthorizationService>();
+
+            services.AddHttpClient<ITelegramBotClient, TelegramBotClient>(httpClient => new(_botOptions.BotToken, httpClient));
 
             services
-                .AddHttpClient(nameof(JournalApiClientService), httpClient =>
+                .AddHttpClient<IGraphQLClient, GraphQLHttpClient>(httpClient =>
                 {
                     httpClient.DefaultRequestVersion = HttpVersion.Version20;
                     httpClient.BaseAddress = new(_botOptions.ApiBaseAddress);
                     httpClient.Timeout = TimeSpan.FromMinutes(_botOptions.ApiTimeout);
-                })
-                .AddTypedClient<IGraphQLClient>(httpClient =>
-                {
+
                     GraphQLHttpClientOptions options = new() { EndPoint = new($"{ _botOptions.ApiBaseAddress }/graphql") };
 
                     NewtonsoftJsonSerializer serializer = new();
@@ -63,7 +64,7 @@ namespace StickerBot
                     };
                     serializer.JsonSerializerSettings.Formatting = Formatting.Indented;
 
-                    return new GraphQLHttpClient(options, serializer, httpClient);
+                    return new(options, serializer, httpClient);
                 })
                 .AddHttpMessageHandler<ClientHttpMessageHandler>();
 
@@ -73,7 +74,12 @@ namespace StickerBot
                 .AddTransient<CommandHandler>()
                 .AddTransient<SuggestionHandler>()
                 .AddControllers()
-                .AddNewtonsoftJson();
+                .AddNewtonsoftJson()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+                });
         }
         
         public void Configure(IApplicationBuilder builder)
@@ -91,10 +97,10 @@ namespace StickerBot
                 .UseRouting()
                 .UseEndpoints(endpoints => 
                 {
-                    endpoints.MapControllerRoute(
-                        name: "tgwebhook",
-                        pattern: $"bot/{ _botOptions.BotToken }",
-                        new { controller = "Webhook", action = "Post" });
+                    //endpoints.MapControllerRoute(
+                    //    name: "tgwebhook",
+                    //    pattern: $"bot/{ _botOptions.BotToken }",
+                    //    new { controller = "Webhook", action = "Post" });
 
                     endpoints.MapControllers();
                 });
