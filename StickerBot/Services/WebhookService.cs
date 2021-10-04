@@ -35,7 +35,7 @@ namespace StickerBot.Services
             
             await botClient.SetWebhookAsync(
                 url: webhookAddress,
-                allowedUpdates: new UpdateType[] { UpdateType.Message, UpdateType.CallbackQuery },
+                allowedUpdates: new[] { UpdateType.Message, UpdateType.CallbackQuery },
                 cancellationToken: ct);
         }
 

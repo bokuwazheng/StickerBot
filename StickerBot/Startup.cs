@@ -40,6 +40,8 @@ namespace StickerBot
             // Set webhook: https://api.telegram.org/bot<bot_token>/setWebhook?url=<https_link_provided_by_ngrok>
             if (_env.IsProduction())
                 services.AddHostedService<WebhookService>();
+            else
+                services.AddHostedService<PollingService>();
 
             services
                 .AddSingleton<Jwt>()
@@ -70,6 +72,7 @@ namespace StickerBot
             services
                 .AddTransient<ClientHttpMessageHandler>()
                 .AddTransient<IJournalApiClient, JournalApiClientService>()
+                .AddTransient<UpdateHandler>()
                 .AddTransient<SenderHandler>()
                 .AddTransient<CommandHandler>()
                 .AddTransient<SubmissionHandler>()
