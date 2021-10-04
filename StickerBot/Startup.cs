@@ -1,97 +1,83 @@
 using GraphQL.Client.Abstractions;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
-using JournalApiClient.Handlers;
+using JournalApiClient.Data;
 using JournalApiClient.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.OpenApi.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using StickerBot.Controllers;
+using StickerBot.Handlers;
+using StickerBot.Options;
+using StickerBot.Services;
 using System;
 using System.Net;
-using System.Net.Http;
-using System.Text.Json;
 using Telegram.Bot;
 
 namespace StickerBot
 {
     public class Startup
     {
-        private IWebHostEnvironment _env;
+        private readonly IWebHostEnvironment _env;
+        private readonly BotOptions _botOptions;
 
         public Startup(IConfiguration configuration, IWebHostEnvironment env)
         {
-            Configuration = configuration;
+            _botOptions = configuration.Get<BotOptions>();
             _env = env;
         }
 
-        public IConfiguration Configuration { get; }
-
         public void ConfigureServices(IServiceCollection services)
         {
-            static string GetEV(string key) => Environment.GetEnvironmentVariable(key);
+            if (_env.IsDevelopment())
+                services.AddSwaggerGen(c => c.SwaggerDoc("v1", new() { Title = "StickerBot", Version = "v1" }));
 
-            string baseAddress = GetEV("ApiBaseAddress");
-            TimeSpan timeout = TimeSpan.FromMinutes(Convert.ToInt32(GetEV("ApiTimeout")));
-            string token = GetEV("BotToken");
-            string webhook = GetEV("WebhookUrl");
-
-            services
-                .AddSwaggerGen(c =>
-                {
-                    c.SwaggerDoc("v1", new OpenApiInfo { Title = "StickerBot", Version = "v1" });
-                });
+            // In Development use: ngrok http https://localhost:5001
+            // Set webhook: https://api.telegram.org/bot<bot_token>/setWebhook?url=<https_link_provided_by_ngrok>
+            if (_env.IsProduction())
+                services.AddHostedService<WebhookService>();
+            else
+                services.AddHostedService<PollingService>();
 
             services
-                .AddHttpClient<JournalApiClientService>((s, h) =>
-                {
-                    h.DefaultRequestVersion = HttpVersion.Version20;
-                    h.BaseAddress = new(baseAddress);
-                    h.Timeout = timeout;
-                })
-                .AddHttpMessageHandler<ClientHttpMessageHandler>();
+                .AddSingleton<Jwt>()
+                .AddHostedService<AuthorizationService>();
+
+            services.AddHttpClient<ITelegramBotClient, TelegramBotClient>(httpClient => new(_botOptions.BotToken, httpClient));
 
             services
-                .AddTransient<ClientHttpMessageHandler>()
-                .AddTransient<IGraphQLClient, GraphQLHttpClient>(s =>
+                .AddHttpClient<IGraphQLClient, GraphQLHttpClient>(httpClient =>
                 {
-                    IHttpClientFactory factory = s.GetRequiredService<IHttpClientFactory>();
-                    HttpClient httpClient = factory.CreateClient(nameof(JournalApiClientService));
+                    httpClient.DefaultRequestVersion = HttpVersion.Version20;
+                    httpClient.BaseAddress = new(_botOptions.ApiBaseAddress);
+                    httpClient.Timeout = TimeSpan.FromMinutes(_botOptions.ApiTimeout);
 
-                    GraphQLHttpClientOptions options = new() { EndPoint = new($"{baseAddress}/graphql") };
+                    GraphQLHttpClientOptions options = new() { EndPoint = new($"{ _botOptions.ApiBaseAddress }/graphql") };
 
                     NewtonsoftJsonSerializer serializer = new();
                     serializer.JsonSerializerSettings.ContractResolver = new DefaultContractResolver()
-                    { 
+                    {
                         NamingStrategy = new SnakeCaseNamingStrategy()
                     };
                     serializer.JsonSerializerSettings.Formatting = Formatting.Indented;
 
                     return new(options, serializer, httpClient);
                 })
-                .AddTransient<ITelegramBotClient>(s =>
-                {
-                    TelegramBotClient client = new(token);
+                .AddHttpMessageHandler<ClientHttpMessageHandler>();
 
-                    // In Development use: ngrok http https://localhost:5001
-                    // Set webhook: https://api.telegram.org/bot<bot_token>/setWebhook?url=<https_link_provided_by_ngrok>
-                    if (_env.IsProduction())
-                        client.SetWebhookAsync(webhook);
-
-                    return client;
-                })
+            services
+                .AddTransient<ClientHttpMessageHandler>()
                 .AddTransient<IJournalApiClient, JournalApiClientService>()
+                .AddTransient<UpdateHandler>()
+                .AddTransient<SenderHandler>()
+                .AddTransient<CommandHandler>()
+                .AddTransient<SubmissionHandler>()
                 .AddControllers()
-                .AddNewtonsoftJson()
-                .AddJsonOptions(options =>
-                {
-                    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-                    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-                });
+                .AddNewtonsoftJson();
         }
         
         public void Configure(IApplicationBuilder builder)
@@ -105,9 +91,18 @@ namespace StickerBot
             }
 
             builder
+                .UseMiddleware<ExceptionHandler>()
                 .UseHttpsRedirection()
                 .UseRouting()
-                .UseEndpoints(endpoints => endpoints.MapControllers());
+                .UseEndpoints(endpoints => 
+                {
+                    endpoints.MapControllerRoute(
+                        name: nameof(WebhookController),
+                        pattern: $"bot/{ _botOptions.BotToken }",
+                        new { controller = "Webhook", action = "Post" });
+
+                    endpoints.MapControllers();
+                });
         }
     }
 }

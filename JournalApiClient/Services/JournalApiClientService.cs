@@ -12,15 +12,11 @@ namespace JournalApiClient.Services
 {
     public class JournalApiClientService : IJournalApiClient
     {
-        public JournalApiClientService(IServiceProvider provider)
+        public JournalApiClientService(IGraphQLClient graphQlClient)
         {
-            HttpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
-            HttpClient = HttpClientFactory.CreateClient(nameof(JournalApiClientService));
-            GraphQLClient = provider.GetRequiredService<IGraphQLClient>();
+            GraphQLClient = graphQlClient;
         }
 
-        protected IHttpClientFactory HttpClientFactory { get; }
-        protected HttpClient HttpClient { get; }
         protected IGraphQLClient GraphQLClient { get; }
 
         public async Task<Review> AddReviewAsync(Review review, CancellationToken ct = default)
@@ -42,7 +38,7 @@ namespace JournalApiClient.Services
                 OperationName = "addReview"
             };
 
-            var result = await GraphQLClient.SendMutationAsync<ReviewResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendMutationAsync<ReviewResponseType>(request, ct);
             return result.Data.AddReview;
         }
 
@@ -67,7 +63,7 @@ namespace JournalApiClient.Services
                 OperationName = "addSender"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<SenderResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendQueryAsync<SenderResponseType>(request, ct);
             return result.Data.AddSender;
         }
 
@@ -89,7 +85,7 @@ namespace JournalApiClient.Services
                 OperationName = "addSuggestion"
             };
 
-            var result = await GraphQLClient.SendMutationAsync<SuggestionResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendMutationAsync<SuggestionResponseType>(request, ct);
             return result.Data.AddSuggestion;
         }
 
@@ -112,7 +108,7 @@ namespace JournalApiClient.Services
                 OperationName = "newReview"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<ReviewResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendQueryAsync<ReviewResponseType>(request, ct);
             return result.Data.NewReview;
         }
 
@@ -133,7 +129,7 @@ namespace JournalApiClient.Services
                 OperationName = "newSuggestion"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<SuggestionResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendQueryAsync<SuggestionResponseType>(request, ct);
             return result.Data.NewSuggestion;
         }
 
@@ -156,7 +152,7 @@ namespace JournalApiClient.Services
                 OperationName = "review"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<ReviewResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendQueryAsync<ReviewResponseType>(request, ct);
             return result.Data.Review;
         }
 
@@ -181,7 +177,7 @@ namespace JournalApiClient.Services
                 OperationName = "sender"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<SenderResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendQueryAsync<SenderResponseType>(request, ct);
             return result.Data.Sender;
         }
 
@@ -206,7 +202,7 @@ namespace JournalApiClient.Services
                 OperationName = "suggester"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<SenderResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendQueryAsync<SenderResponseType>(request, ct);
             return result.Data.Suggester;
         }
 
@@ -228,7 +224,7 @@ namespace JournalApiClient.Services
                 OperationName = "suggestion"
             };
 
-            var result = await GraphQLClient.SendQueryAsync<SuggestionResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendQueryAsync<SuggestionResponseType>(request, ct);
             return result.Data.Suggestion;
         }
 
@@ -253,7 +249,7 @@ namespace JournalApiClient.Services
                 OperationName = "updateSender"
             };
 
-            var result = await GraphQLClient.SendMutationAsync<SenderResponseType>(request, ct).ConfigureAwait(false);
+            var result = await GraphQLClient.SendMutationAsync<SenderResponseType>(request, ct);
             return result.Data.UpdateSender;
         }
     }
