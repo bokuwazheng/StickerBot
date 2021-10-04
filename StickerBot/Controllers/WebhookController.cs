@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
 using StickerBot.Services;
@@ -14,7 +13,7 @@ namespace StickerBot.Controllers
             if (update is null)
                 return BadRequest();
 
-            await updateHandler.HandleAsync(update, CancellationToken.None);
+            await updateHandler.HandleAsync(update);
 
             return Ok();
         }

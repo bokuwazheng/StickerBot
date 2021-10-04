@@ -30,23 +30,23 @@ namespace StickerBot.Services
             _suggestionHandler = suggestionHandler;
         }
 
-        public async Task HandleAsync(Update update, CancellationToken ct)
+        public async Task HandleAsync(Update update, CancellationToken ct = default)
         {
             if (update is null)
                 return;
 
             _logger.LogInformation("Handling update of type {type}", update.Type);
 
-            bool isWelcome = await _senderHandler.IsWelcomeAsync(update);
+            bool isWelcome = await _senderHandler.IsWelcomeAsync(update, ct);
             if (!isWelcome)
                 return;
 
             Task task = update.Type switch
             {
-                UpdateType.CallbackQuery => _suggestionHandler.HandleReviewAsync(update.CallbackQuery),
-                UpdateType.Message when update.Message.Type is MessageType.Document => _suggestionHandler.HandleNewSuggestionAsync(update.Message),
-                UpdateType.Message when update.Message.Type is MessageType.Text => _commandHander.HandleAsync(update.Message),
-                UpdateType.Message => HandleUnsupportedAsync(update.Message),
+                UpdateType.CallbackQuery => _suggestionHandler.HandleReviewAsync(update.CallbackQuery, ct),
+                UpdateType.Message when update.Message.Type is MessageType.Document => _suggestionHandler.HandleNewSuggestionAsync(update.Message, ct),
+                UpdateType.Message when update.Message.Type is MessageType.Text => _commandHander.HandleAsync(update.Message, ct),
+                UpdateType.Message => HandleUnsupportedAsync(update.Message, ct),
                 _ => null
             };
 

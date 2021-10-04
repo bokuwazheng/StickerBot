@@ -5,11 +5,16 @@ using JournalApiClient.Extensions;
 using JournalApiClient.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using StickerBot.Options;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace StickerBot.Services
 {
@@ -44,10 +49,39 @@ namespace StickerBot.Services
                 "/guidelines" => HandleGuidelinesCommadAsync(userId, ct),
                 "/status" when int.TryParse(argument, out int suggestionId) => HandleStatusCommadAsync(suggestionId, userId, ct),
                 "/status" => HandleStatusCommadAsync(userId, ct),
+                "/review" => HandleReviewCommandAsync(userId, ct),
                 _ => HandleUnknownCommadAsync(userId, ct)
             };
 
             await task;
+        }
+
+        private async Task HandleReviewCommandAsync(int userId, CancellationToken ct)
+        {
+            if (userId != _options.ChatId)
+                return;
+
+            Suggestion suggestion = await _repo.GetNewSuggestionAsync(ct);
+
+            if (suggestion is null)
+                return;
+
+            ReviewLite model = new(suggestion.Id, _options.ChatId);
+            Dictionary<string, string> map = new();
+            ReviewResult[] values = Enum.GetValues<ReviewResult>();
+
+            foreach (ReviewResult result in values)
+            {
+                model.Result = result;
+                string resultJson = JsonConvert.SerializeObject(model);
+                map.Add(result.ToDescription(), resultJson);
+            }
+
+            InlineKeyboardMarkup markup = new(map
+                .Select(item => new[] { InlineKeyboardButton.WithCallbackData(item.Key, item.Value) }).ToArray());
+
+            Sender sender = await _repo.GetSuggesterAsync(suggestion.Id, ct);
+            await _bot.SendDocumentAsync(_options.ChatId, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
         }
 
         /// <summary>

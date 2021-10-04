@@ -26,6 +26,8 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Starting polling service...");
 
+            await _bot.DeleteWebhookAsync();
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try

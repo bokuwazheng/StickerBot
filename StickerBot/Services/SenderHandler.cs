@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 
 namespace StickerBot.Services
 {
@@ -26,7 +27,12 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Checking user...");
 
-            User user = update.Message.From;
+            User user = update.Type switch
+            {
+                UpdateType.Message => update.Message.From,
+                UpdateType.CallbackQuery => update.CallbackQuery.From,
+                _ => null
+            };
 
             Sender sender = await _repo.GetSenderAsync(user.Id);
 
