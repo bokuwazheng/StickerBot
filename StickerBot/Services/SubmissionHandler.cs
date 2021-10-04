@@ -39,20 +39,17 @@ namespace StickerBot.Services
             _logger.LogInformation("Recieved a review");
 
             ReviewLite review = JsonConvert.DeserializeObject<ReviewLite>(callbackQuery.Data);
+            await _repo.AddReviewAsync(new(review), ct);
 
             if (review.Result is not ReviewResult.None)
             {
-                await _repo.AddReviewAsync(new(review), ct);
-
                 Sender sender = await _repo.GetSuggesterAsync(review.SuggestionId, ct);
 
                 if (review.Result is ReviewResult.Banned)
                     await BanAsync(callbackQuery.Id, sender, ct);
                 else
                 if (sender.Notify)
-                {
                     await NotifyAsync(review, sender.UserId, ct);
-                }
 
                 await _bot.EditMessageCaptionAsync(review.SuggesterId, callbackQuery.Message.MessageId, review.Result.ToDescription(), null, ct);
             }
