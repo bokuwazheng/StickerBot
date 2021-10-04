@@ -41,15 +41,15 @@ namespace StickerBot.Services
             Uri uri = new($"{ _botOptions.ApiBaseAddress }/login");
             using HttpRequestMessage jwtRequest = new(HttpMethod.Get, uri) { Content = content };
 
-            using HttpResponseMessage jwtResponse = await _httpClient.SendAsync(jwtRequest, ct).ConfigureAwait(false);
+            using HttpResponseMessage jwtResponse = await _httpClient.SendAsync(jwtRequest, ct);
 
             if (!jwtResponse.IsSuccessStatusCode)
             {
-                _logger.LogInformation("Auhtorization failed! {code}: {reason}", (int)jwtResponse.StatusCode, jwtResponse.ReasonPhrase);
+                _logger.LogInformation("Auhtorization failed: {code} {reason}", (int)jwtResponse.StatusCode, jwtResponse.ReasonPhrase);
                 return;
             }
 
-            Stream responseStream = await jwtResponse.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            Stream responseStream = await jwtResponse.Content.ReadAsStreamAsync(ct);
             await using (responseStream)
             {
                 Jwt jwt = await JsonSerializer.DeserializeAsync<Jwt>(responseStream);
@@ -61,6 +61,8 @@ namespace StickerBot.Services
 
         public Task StopAsync(CancellationToken ct)
         {
+            _logger.LogInformation("Stopping authorization service...");
+
             return Task.CompletedTask;
         }
     }

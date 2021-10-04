@@ -19,14 +19,14 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace StickerBot.Services
 {
-    public class SuggestionHandler
+    public class SubmissionHandler
     {
         private readonly ITelegramBotClient _bot;
-        private readonly ILogger<SuggestionHandler> _logger;
+        private readonly ILogger<SubmissionHandler> _logger;
         private readonly IJournalApiClient _repo;
         private readonly BotOptions _options;
 
-        public SuggestionHandler(ITelegramBotClient botClient, ILogger<SuggestionHandler> logger, IJournalApiClient repo, IOptions<BotOptions> options)
+        public SubmissionHandler(ITelegramBotClient botClient, ILogger<SubmissionHandler> logger, IJournalApiClient repo, IOptions<BotOptions> options)
         {
             _bot = botClient;
             _logger = logger;
@@ -34,7 +34,7 @@ namespace StickerBot.Services
             _options = options.Value;
         }
 
-        public async Task HandleReviewAsync(CallbackQuery callbackQuery, CancellationToken ct)
+        public async Task HandleReviewAsync(CallbackQuery callbackQuery, CancellationToken ct = default)
         {
             _logger.LogInformation("Recieved a review");
 
@@ -42,28 +42,28 @@ namespace StickerBot.Services
 
             if (review.Result is not ReviewResult.None)
             {
-                await _repo.AddReviewAsync(new(review), ct).ConfigureAwait(false);
+                await _repo.AddReviewAsync(new(review), ct);
 
-                Sender sender = await _repo.GetSuggesterAsync(review.SuggestionId, ct).ConfigureAwait(false);
+                Sender sender = await _repo.GetSuggesterAsync(review.SuggestionId, ct);
 
                 if (review.Result is ReviewResult.Banned)
-                    await BanAsync(callbackQuery.Id, sender, ct).ConfigureAwait(false);
+                    await BanAsync(callbackQuery.Id, sender, ct);
                 else
                 if (sender.Notify)
                 {
-                    await NotifyAsync(review, sender.UserId, ct).ConfigureAwait(false);
+                    await NotifyAsync(review, sender.UserId, ct);
                 }
 
-                await _bot.EditMessageCaptionAsync(review.SuggesterId, callbackQuery.Message.MessageId, review.Result.ToDescription(), null, ct).ConfigureAwait(false);
+                await _bot.EditMessageCaptionAsync(review.SuggesterId, callbackQuery.Message.MessageId, review.Result.ToDescription(), null, ct);
             }
 
-            Suggestion suggestion = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
+            Suggestion suggestion = await _repo.GetNewSuggestionAsync(ct);
 
             if (suggestion is not null)
-                await SendForReviewAsync(suggestion, ct).ConfigureAwait(false);
+                await SendForReviewAsync(suggestion, ct);
         }
 
-        public async Task HandleNewSuggestionAsync(Message message, CancellationToken ct)
+        public async Task HandleNewSuggestionAsync(Message message, CancellationToken ct = default)
         {
             _logger.LogInformation("Recieved new suggestion");
 
@@ -74,14 +74,14 @@ namespace StickerBot.Services
             int userId = message.From.Id;
             string fileId = message.Document.FileId;
 
-            Suggestion suggestion = await _repo.AddSuggestionAsync(fileId, userId, ct).ConfigureAwait(false);
+            Suggestion suggestion = await _repo.AddSuggestionAsync(fileId, userId, ct);
             string text = string.Format(Reply.ThankYou, suggestion.Id);
-            await _bot.SendTextMessageAsync(userId, text, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, text, cancellationToken: ct);
 
-            Suggestion unreviewed = await _repo.GetNewSuggestionAsync(ct).ConfigureAwait(false);
+            Suggestion unreviewed = await _repo.GetNewSuggestionAsync(ct);
 
             if (suggestion.Id == unreviewed.Id)
-                await SendForReviewAsync(suggestion, ct).ConfigureAwait(false);
+                await SendForReviewAsync(suggestion, ct);
         }
 
         private async Task SendForReviewAsync(Suggestion suggestion, CancellationToken ct)
@@ -102,7 +102,7 @@ namespace StickerBot.Services
             InlineKeyboardMarkup markup = new(map
                 .Select(item => new[] { InlineKeyboardButton.WithCallbackData(item.Key, item.Value) }).ToArray());
 
-            Sender sender = await _repo.GetSuggesterAsync(suggestion.Id, ct).ConfigureAwait(false);
+            Sender sender = await _repo.GetSuggesterAsync(suggestion.Id, ct);
             await _bot.SendDocumentAsync(_options.ChatId, new(suggestion.FileId), $"From { sender.Username }", replyMarkup: markup, cancellationToken: ct);
         }
 
@@ -114,10 +114,10 @@ namespace StickerBot.Services
             _logger.LogInformation("Banning user {userId}", sender.UserId);
 
             sender = sender with { IsBanned = true };
-            await _repo.UpdateSenderAsync(sender, ct).ConfigureAwait(false);
+            await _repo.UpdateSenderAsync(sender, ct);
 
             string text = $"User { sender.Username } got banned.";
-            await _bot.AnswerCallbackQueryAsync(callbackQueryId, text, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.AnswerCallbackQueryAsync(callbackQueryId, text, cancellationToken: ct);
         }
 
         /// <summary>
@@ -127,13 +127,13 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Notifying user {userId}", userId);
 
-            Suggestion suggestion = await _repo.GetSuggestionAsync(review.SuggestionId, ct).ConfigureAwait(false);
+            Suggestion suggestion = await _repo.GetSuggestionAsync(review.SuggestionId, ct);
 
             string reply = review.Result is ReviewResult.Approved
                 ? Reply.Approved
                 : string.Format(Reply.Declined, review.Result.ToDescription());
 
-            await _bot.SendDocumentAsync(userId, new(suggestion.FileId), reply, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendDocumentAsync(userId, new(suggestion.FileId), reply, cancellationToken: ct);
         }
     }
 }

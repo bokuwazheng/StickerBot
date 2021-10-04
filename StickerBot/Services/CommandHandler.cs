@@ -28,7 +28,7 @@ namespace StickerBot.Services
             _options = options.Value;
         }
 
-        public async Task HandleAsync(Message message, CancellationToken ct)
+        public async Task HandleAsync(Message message, CancellationToken ct = default)
         {
             int userId = message.From.Id;
 
@@ -57,8 +57,8 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Greeting user {userId}", userId);
 
-            await _bot.SendTextMessageAsync(userId, Reply.Hello, cancellationToken: ct).ConfigureAwait(false);
-            await _bot.SendTextMessageAsync(userId, string.Format(Reply.BeforeSubmitting, _options.Guidelines), cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, Reply.Hello, cancellationToken: ct);
+            await _bot.SendTextMessageAsync(userId, string.Format(Reply.BeforeSubmitting, _options.Guidelines), cancellationToken: ct);
         }
 
         /// <summary>
@@ -68,27 +68,27 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Sending submission {suggestionId} status to user {userId}", suggestionId, userId);
 
-            Suggestion suggestion = await _repo.GetSuggestionAsync(suggestionId, ct).ConfigureAwait(false);
+            Suggestion suggestion = await _repo.GetSuggestionAsync(suggestionId, ct);
 
             if (suggestion is null)
             {
-                await _bot.SendTextMessageAsync(userId, string.Format(Reply.SuggestionNotFound, suggestionId), cancellationToken: ct).ConfigureAwait(false);
+                await _bot.SendTextMessageAsync(userId, string.Format(Reply.SuggestionNotFound, suggestionId), cancellationToken: ct);
                 return;
             }
 
             if (suggestion.UserId != userId)
             {
-                await _bot.SendTextMessageAsync(userId, Reply.StatusUnavaliable, cancellationToken: ct).ConfigureAwait(false);
+                await _bot.SendTextMessageAsync(userId, Reply.StatusUnavaliable, cancellationToken: ct);
                 return;
             }
 
-            Review review = await _repo.GetReviewAsync(suggestionId, ct).ConfigureAwait(false);
+            Review review = await _repo.GetReviewAsync(suggestionId, ct);
 
             string reply = review.ResultCode is ReviewResult.Approved
                 ? Reply.Approved
                 : string.Format(Reply.Declined, review.ResultCode.ToDescription());
 
-            await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct);
         }
 
         /// <summary>
@@ -98,11 +98,11 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Sending latest submission status to {userId}", userId);
 
-            Review review = await _repo.GetNewReviewAsync(userId, ct).ConfigureAwait(false);
+            Review review = await _repo.GetNewReviewAsync(userId, ct);
 
             if (review is null)
             {
-                await _bot.SendTextMessageAsync(userId, Reply.LatestNotYetReviewed, cancellationToken: ct).ConfigureAwait(false);
+                await _bot.SendTextMessageAsync(userId, Reply.LatestNotYetReviewed, cancellationToken: ct);
                 return;
             }
 
@@ -110,7 +110,7 @@ namespace StickerBot.Services
                 ? Reply.Approved
                 : string.Format(Reply.Declined, review.ResultCode.ToDescription());
 
-            await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct);
         }
 
         /// <summary>
@@ -120,20 +120,20 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Setting user {userId} subscriptions status to {notify}", userId, notify);
 
-            Sender sender = await _repo.GetSenderAsync(userId, ct).ConfigureAwait(false);
+            Sender sender = await _repo.GetSenderAsync(userId, ct);
             string reply;
 
             if (sender.Notify == notify)
             {
                 reply = notify ? Reply.AlreadySubscribed : Reply.AlreadyUnsubscribed;
-                await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct).ConfigureAwait(false);
+                await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct);
                 return;
             }
 
             sender = sender with { Notify = notify };
-            sender = await _repo.UpdateSenderAsync(sender, ct).ConfigureAwait(false);
+            sender = await _repo.UpdateSenderAsync(sender, ct);
             reply = sender.Notify ? Reply.Subscribed : Reply.Unsubscribed;
-            await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, reply, cancellationToken: ct);
         }
 
         /// <summary>
@@ -143,7 +143,7 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Sending guidelines to user {userId}", userId);
 
-            await _bot.SendTextMessageAsync(userId, string.Format(Reply.Guidelines, _options.Guidelines), cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, string.Format(Reply.Guidelines, _options.Guidelines), cancellationToken: ct);
         }
 
         /// <summary>
@@ -153,7 +153,7 @@ namespace StickerBot.Services
         {
             _logger.LogInformation("Informing user {userId} about avaliable uses", userId);
 
-            await _bot.SendTextMessageAsync(userId, Reply.WrongCommand, cancellationToken: ct).ConfigureAwait(false);
+            await _bot.SendTextMessageAsync(userId, Reply.WrongCommand, cancellationToken: ct);
         }
     }
 }

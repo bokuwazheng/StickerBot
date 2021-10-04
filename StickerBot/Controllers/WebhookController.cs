@@ -1,6 +1,4 @@
-﻿using JournalApiClient.Data;
-using JournalApiClient.Data.Constants;
-using JournalApiClient.Services;
+﻿using JournalApiClient.Data.Constants;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Threading;
@@ -9,76 +7,47 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using StickerBot.Services;
-using System.ComponentModel.DataAnnotations;
-using StickerBot.Options;
-using Microsoft.Extensions.Options;
 
 namespace StickerBot.Controllers
 {
-    [ApiController]
-    [Route("[controller]")]
     public class WebhookController : ControllerBase
     {
         private readonly ILogger<WebhookController> _logger;
         private readonly ITelegramBotClient _bot;
-        private readonly IJournalApiClient _repo;
-        private readonly BotOptions _botOptions;
 
-        public WebhookController(ILogger<WebhookController> logger, ITelegramBotClient bot, IJournalApiClient repo, IOptions<BotOptions> botOptions)
+        public WebhookController(ILogger<WebhookController> logger, ITelegramBotClient bot)
         {
             _logger = logger;
             _bot = bot;
-            _repo = repo;
-            _botOptions = botOptions.Value;
         }
 
         [HttpPost]
         public async Task<IActionResult> Post(
             [FromBody] Update update, 
+            [FromServices] SenderHandler senderHandler,
             [FromServices] CommandHandler commandHander, 
-            [FromServices] SuggestionHandler suggestionHandler)
+            [FromServices] SubmissionHandler suggestionHandler)
         {
             if (update is null)
                 return BadRequest();
 
             _logger.LogInformation("Received an update of type {type}", update.Type);
 
-            User user = update.Message.From;
-
-            Sender sender = await _repo.GetSenderAsync(user.Id).ConfigureAwait(false);
-
-            if (sender is { IsBanned: true })
-            {
-                await _bot.SendTextMessageAsync(user.Id, Reply.Banned).ConfigureAwait(false);
+            bool isWelcome = await senderHandler.IsWelcomeAsync(update);
+            if (!isWelcome)
                 return Ok();
-            }
-
-            if (sender is null)
-            {
-                sender = new()
-                {
-                    UserId = user.Id,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    Username = user.Username,
-                    ChatId = update.Message.Chat.Id
-                };
-
-                _logger.LogInformation("Adding new sender {id}", user.Id);
-                await _repo.AddSenderAsync(sender, CancellationToken.None).ConfigureAwait(false);
-            }
 
             Task task = update.Type switch
             {
-                UpdateType.CallbackQuery => suggestionHandler.HandleReviewAsync(update.CallbackQuery, CancellationToken.None),
-                UpdateType.Message when update.Message.Type is MessageType.Document => suggestionHandler.HandleNewSuggestionAsync(update.Message, CancellationToken.None),
-                UpdateType.Message when update.Message.Type is MessageType.Text => commandHander.HandleAsync(update.Message, CancellationToken.None),
-                UpdateType.Message => HandleUnsupportedAsync(update.Message, CancellationToken.None),
+                UpdateType.CallbackQuery => suggestionHandler.HandleReviewAsync(update.CallbackQuery),
+                UpdateType.Message when update.Message.Type is MessageType.Document => suggestionHandler.HandleNewSuggestionAsync(update.Message),
+                UpdateType.Message when update.Message.Type is MessageType.Text => commandHander.HandleAsync(update.Message),
+                UpdateType.Message => HandleUnsupportedAsync(update.Message),
                 _ => null
             };
 
             if (task is not null)
-                await task.ConfigureAwait(false);
+                await task;
 
             return Ok();
         }
@@ -86,9 +55,10 @@ namespace StickerBot.Controllers
         /// <summary>
         /// Handle unsupported message type.
         /// </summary>
-        private async Task HandleUnsupportedAsync(Message message, CancellationToken ct)
+        private async Task HandleUnsupportedAsync(Message message, CancellationToken ct = default)
         {
             _logger.LogInformation("Received a message of unsupported type {type} from {id}", message.Type, message.From.Id);
+
             await _bot.SendTextMessageAsync(message.Chat.Id, Reply.WrongUpdateType, cancellationToken: ct);
         }
     }

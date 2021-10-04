@@ -16,7 +16,6 @@ using StickerBot.Options;
 using StickerBot.Services;
 using System;
 using System.Net;
-using System.Text.Json;
 using Telegram.Bot;
 
 namespace StickerBot
@@ -71,15 +70,11 @@ namespace StickerBot
             services
                 .AddTransient<ClientHttpMessageHandler>()
                 .AddTransient<IJournalApiClient, JournalApiClientService>()
+                .AddTransient<SenderHandler>()
                 .AddTransient<CommandHandler>()
-                .AddTransient<SuggestionHandler>()
+                .AddTransient<SubmissionHandler>()
                 .AddControllers()
-                .AddNewtonsoftJson()
-                .AddJsonOptions(options =>
-                {
-                    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-                    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-                });
+                .AddNewtonsoftJson();
         }
         
         public void Configure(IApplicationBuilder builder)
@@ -93,14 +88,15 @@ namespace StickerBot
             }
 
             builder
+                .UseMiddleware<ExceptionHandler>()
                 .UseHttpsRedirection()
                 .UseRouting()
                 .UseEndpoints(endpoints => 
                 {
-                    //endpoints.MapControllerRoute(
-                    //    name: "tgwebhook",
-                    //    pattern: $"bot/{ _botOptions.BotToken }",
-                    //    new { controller = "Webhook", action = "Post" });
+                    endpoints.MapControllerRoute(
+                        name: nameof(WebhookController),
+                        pattern: $"bot/{ _botOptions.BotToken }",
+                        new { controller = "Webhook", action = "Post" });
 
                     endpoints.MapControllers();
                 });

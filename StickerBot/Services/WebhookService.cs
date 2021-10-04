@@ -24,30 +24,26 @@ namespace StickerBot.Services
             _botConfig = configuration.Get<BotOptions>();
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken ct)
         {
             using var scope = _services.CreateScope();
             var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
 
-            //var webhookAddress = $"{_botConfig.WebhookUrl}/bot/{_botConfig.BotToken}";
-            var webhookAddress = _botConfig.WebhookUrl;
+            var webhookAddress = $"{_botConfig.WebhookUrl}/bot/{_botConfig.BotToken}";
 
             _logger.LogInformation("Setting webhook: ", webhookAddress);
             
             await botClient.SetWebhookAsync(
                 url: webhookAddress,
-                allowedUpdates: Array.Empty<UpdateType>(),
-                cancellationToken: cancellationToken);
+                allowedUpdates: new UpdateType[] { UpdateType.Message, UpdateType.CallbackQuery },
+                cancellationToken: ct);
         }
 
-        public async Task StopAsync(CancellationToken cancellationToken)
+        public Task StopAsync(CancellationToken ct)
         {
-            using var scope = _services.CreateScope();
-            var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
+            _logger.LogInformation("Stopping webhook service...");
 
-            _logger.LogInformation("Removing webhook");
-
-            await botClient.DeleteWebhookAsync(cancellationToken: cancellationToken);
+            return Task.CompletedTask;
         }
     }
 }
